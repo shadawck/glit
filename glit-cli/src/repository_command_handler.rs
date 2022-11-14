@@ -2,19 +2,10 @@ use clap::ArgMatches;
 use glit_core::config::RepositoryConfig;
 use reqwest::Url;
 
+use crate::utils::fix_input_url;
+
 pub struct RepoCommandHandler {}
 
-fn fix_input_url(input_repository_url: &str) -> String {
-    let mut url = String::new();
-    if !&input_repository_url.ends_with('/') {
-        let format = format!("{}/", input_repository_url);
-        url.push_str(&format);
-        return url;
-    }
-
-    input_repository_url.to_string()
-}
-// Handle and convert data for service
 impl RepoCommandHandler {
     pub fn config(subcommand_match: &ArgMatches) -> RepositoryConfig {
         let input_repository_url = subcommand_match

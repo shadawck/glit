@@ -14,29 +14,13 @@ impl Log {
 
         let mut repo_data = RepositoryCommitData::new();
 
-        //print!("len rev : {:#?}", revwalk.into_iter().collect::<Vec<_>>());
-        // Push commit head
         revwalk.push_head().unwrap();
 
         for commit_id in revwalk {
             let commit_id = commit_id.unwrap();
 
-            // Build commit list
-
             repo_data.update(&repo, commit_id);
-
-            //build commiter
-            //Committer {
-            //    name: author.to_string(),
-            //    commit_list: ,
-            //};
-            //
-            //// try to add commiter to list
-            ////committer_seen.insert();
-            //
-            //let email = commit_sigature.email().unwrap();
         }
-        //
 
         repo_data
     }

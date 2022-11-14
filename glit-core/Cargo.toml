@@ -8,12 +8,12 @@ reqwest = { version = "0.11.12" }
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 clap = { version = "4.0.12", features = ["cargo"] }
 futures = "0.3.24"
-regex = "1.6.0"
 scraper = "0.13.0"
 url = "2.3.1"
-governor = "0.5.0"
 git2 = "0.15.0"
 rand = "0.8.5"
 ahash = "0.8.2"
+serde = { version = "1.0.147", features = ["derive"] }
+colored = "2.0.0"
 
 [lib]

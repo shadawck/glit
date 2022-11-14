@@ -1,8 +1,8 @@
 use reqwest::Url;
 
+#[derive(Debug, Clone)]
 pub struct GlobalConfig {
-    //pub with_proxy: bool,
-    //with_format : Enum (json, txt)
+    pub output: String,
     pub verbose: bool,
 }
 
@@ -13,12 +13,14 @@ pub struct RepositoryConfig {
     pub all_branches: bool,
 }
 
+#[derive(Debug, Clone)]
 pub struct UserConfig {
     pub url: Url,
-    pub verbose: bool,
+    pub all_branches: bool,
 }
 
+#[derive(Debug, Clone)]
 pub struct OrgConfig {
     pub url: Url,
-    pub verbose: bool,
+    pub all_branches: bool,
 }

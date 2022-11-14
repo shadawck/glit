@@ -11,14 +11,14 @@ impl OrgCommandHandler {
             .unwrap()
             .as_str();
 
-        let verbose = subcommand_match
-            .get_one::<bool>("verbose")
-            .unwrap_or(&false)
+        let all_branches = subcommand_match
+            .get_one::<bool>("all_branches")
+            .unwrap()
             .to_owned();
 
         OrgConfig {
             url: Url::parse(user_url).unwrap(),
-            verbose,
+            all_branches,
         }
     }
 }

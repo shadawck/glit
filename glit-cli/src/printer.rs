@@ -2,15 +2,13 @@ use std::{collections::HashMap, marker::PhantomData};
 
 use colored::Colorize;
 use glit_core::{
-    config::{GlobalConfig, RepositoryConfig},
+    config::GlobalConfig,
     org::OrgCommitData,
-    repo::{Committer, Repository, RepositoryCommitData},
+    repo::{Repository, RepositoryCommitData},
     user::UserCommitData,
 };
-use tokio::time::sleep;
 
 pub struct Printer<T> {
-    config: RepositoryConfig,
     global_config: GlobalConfig,
     repo: Repository,
     data: PhantomData<T>,
@@ -19,9 +17,8 @@ pub struct Printer<T> {
 type AuthorName = String;
 
 impl Printer<HashMap<String, RepositoryCommitData>> {
-    pub fn new(config: RepositoryConfig, global_config: GlobalConfig, repo: Repository) -> Self {
+    pub fn new(global_config: GlobalConfig, repo: Repository) -> Self {
         Self {
-            config,
             global_config,
             repo,
             data: PhantomData::default(),
@@ -33,7 +30,7 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
         self
     }
 
-    pub fn print(&self, data: HashMap<AuthorName, RepositoryCommitData>) {
+    pub fn print(&self, data: &HashMap<AuthorName, RepositoryCommitData>) {
         println!("Check mail for {} of {}", self.repo.name, self.repo.owner);
 
         if self.global_config.verbose {
@@ -41,8 +38,8 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
             for (branch, value) in data {
                 let branch_format = format!("[ Branch : {} ]", branch).yellow();
                 println!("{}", branch_format);
-                for (author, data) in value.committer_data {
-                    let mails = data.commit_list.into_keys().collect::<Vec<String>>();
+                for (author, data) in &value.committer_data {
+                    let mails = data.commit_list.keys().cloned().collect::<Vec<String>>();
                     print!("{}:", author.blue());
 
                     print_mail(mails, author);
@@ -55,7 +52,7 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
     }
 }
 
-fn print_mail(mails: Vec<String>, author: String) {
+fn print_mail(mails: Vec<String>, author: &str) {
     if mails.len() == 1 {
         let mail = mails.first().unwrap().trim();
         let fmail = format_mail(mail);

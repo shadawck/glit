@@ -8,6 +8,8 @@ use std::{
 };
 
 use rand::distributions::{Alphanumeric, DistString};
+use serde::{Deserialize, Serialize};
+
 use std::sync::mpsc;
 
 use git2::{build::RepoBuilder, BranchType, Oid};
@@ -23,7 +25,7 @@ pub struct Repository {
     pub owner: String,
     pub url: Url,
     branches: Vec<String>,
-    clone_paths: Vec<PathBuf>, // A pah for each branch
+    clone_paths: Vec<PathBuf>, // A path for each branch
 }
 
 pub struct RepositoryFactory {
@@ -98,7 +100,10 @@ impl RepositoryFactory {
     pub fn create(mut self) -> Repository {
         let mut path_segments = self.url.path_segments().unwrap();
         let owner = path_segments.next().unwrap().to_string();
+
         let name = path_segments.next().unwrap().to_string();
+        println!("Building {} repository...", name);
+
         let url = self.url;
 
         // default location
@@ -131,7 +136,7 @@ impl RepositoryFactory {
                     .collect::<Vec<String>>()[1..]
                     .to_vec();
 
-                println!("remote {:#?}", branches);
+                println!("Remote {:?}", branches);
 
                 let new_paths =
                     Self::clone_multiple_branches(url.clone(), name.clone(), branches.clone());
@@ -162,16 +167,16 @@ impl RepositoryFactory {
 }
 
 type Mail = String; // A mail appear ...
-type Hash = String; // ... in a list of commit identified by a hash
+                    // ... in a list of commit identified by a hash
 
 // A Person commiting with his name and all the commit he pushed
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Committer {
     pub commit_list: BTreeMap<Mail, Vec<String>>,
 }
 
 impl Committer {
-    pub fn new(author: String, mail: String, commit_id: String) -> Self {
+    pub fn new(mail: String, commit_id: String) -> Self {
         let mut commit_list = BTreeMap::new();
         commit_list.insert(mail, vec![commit_id]);
 
@@ -181,7 +186,7 @@ impl Committer {
 
 type AuthorName = String;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RepositoryCommitData {
     pub committer_data: BTreeMap<AuthorName, Committer>,
 }
@@ -200,31 +205,18 @@ impl RepositoryCommitData {
         let mail = commit_sigature.email().unwrap_or("").to_string();
 
         // To use only on first insertion
-        let committer = Committer::new(author.clone(), mail.clone(), commit_id.to_string());
+        let committer = Committer::new(mail.clone(), commit_id.to_string());
 
         if self.committer_data.contains_key(&author) {
             let mut existing_commiter = self.committer_data.get_mut(&author).unwrap().to_owned();
 
-            if existing_commiter.commit_list.contains_key(&mail) {
-                println!(
-                    "Committer {} already have the mail {}",
-                    author.clone(),
-                    mail.clone()
-                );
-            } else {
-                println!(
-                    "Committer {} have a new mail {} to be inserted",
-                    author.clone(),
-                    mail.clone()
-                );
-
+            if !existing_commiter.commit_list.contains_key(&mail) {
                 existing_commiter.commit_list.insert(mail.clone(), vec![]);
 
                 self.committer_data
                     .insert(author.clone(), existing_commiter);
             }
 
-            println!("Always update commit_id");
             // Update commit_id list
             let mut actual_committer = self.committer_data.get_mut(&author).unwrap().to_owned();
             let mut commit_ids = actual_committer
@@ -237,11 +229,11 @@ impl RepositoryCommitData {
             actual_committer.commit_list.insert(mail, commit_ids);
 
             // insert modified version of commiter
-            println!("Insert new version of committer");
+            //println!("Insert new version of committer");
             self.committer_data.insert(author, actual_committer);
         } else {
             self.committer_data.insert(author.clone(), committer);
-            println!("The author {} have been added", author.clone());
+            //println!("The author {} have been added", author.clone());
         }
 
         self.to_owned()

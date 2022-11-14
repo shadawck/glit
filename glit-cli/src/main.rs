@@ -4,9 +4,11 @@ pub mod org_command_handler;
 pub mod printer;
 pub mod repository_command_handler;
 pub mod user_command_handler;
+pub mod utils;
 
 use std::collections::HashMap;
 
+use exporter::Exporter;
 use glit_core::{
     org::{Org, OrgCommitData, OrgFactory},
     repo::{Repository, RepositoryCommitData, RepositoryFactory},
@@ -43,6 +45,14 @@ async fn main() {
                 .help("Add information on commit hash, username ...")
                 .num_args(0),
         )
+        .arg(
+            Arg::new("output")
+                .value_name("PATH")
+                .short('o')
+                .long("output")
+                .help("export data to json")
+                .num_args(1),
+        )
         .subcommand(
             Command::new("repo")
                 .about("Extract emails from repository by crawling commit metadata.")
@@ -75,6 +85,13 @@ async fn main() {
                     Arg::new("org_url")
                         .value_name("URL")
                         .help("Github url of an organisation."),
+                )
+                .arg(
+                    Arg::new("all_branches")
+                        .short('a')
+                        .long("all-branches")
+                        .help("Get all branch of the repo")
+                        .num_args(0),
                 ),
         )
         .subcommand(
@@ -88,10 +105,10 @@ async fn main() {
                         .help("Github url of a user"),
                 )
                 .arg(
-                    Arg::new("verbose")
-                        .short('v')
-                        .long("verbose")
-                        .help("Add information on commit hash, username ...")
+                    Arg::new("all_branches")
+                        .short('a')
+                        .long("all-branches")
+                        .help("Get all branch of the repo")
                         .num_args(0),
                 ),
         )
@@ -108,18 +125,22 @@ async fn main() {
             let repo_extraction: HashMap<String, RepositoryCommitData> =
                 repository.clone().committed_data();
 
-            let printer = Printer::new(repository_config, global_config, repository);
-            printer.print(repo_extraction);
+            let printer = Printer::new(global_config.clone(), repository);
+            printer.print(&repo_extraction);
+            let exporter = Exporter::new(global_config);
+            exporter.export(&repo_extraction)
         }
         Some(("user", sub_match)) => {
             let user_config = UserCommandHandler::config(sub_match);
-            let user: User = UserFactory::with_config(user_config).create(&client); //
-            let user_extraction: UserCommitData = user.committed_data();
+            let user: User = UserFactory::with_config(user_config).create(&client).await; //
+            let user_extraction: HashMap<String, UserCommitData> = user.committed_data();
+
+            //println!("{:#?}", user_extraction);
         }
         Some(("org", sub_match)) => {
             let org_config = OrgCommandHandler::config(sub_match);
             let org: Org = OrgFactory::with_config(org_config).create(&client);
-            let org_extraction: OrgCommitData = org.committed_data();
+            let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
         }
         _ => {}
     }

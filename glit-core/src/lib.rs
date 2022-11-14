@@ -1,7 +1,5 @@
-use repo::RepositoryCommitData;
-
-pub mod clone;
 pub mod config;
+
 pub mod log;
 pub mod org;
 pub mod repo;

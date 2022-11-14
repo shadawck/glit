@@ -1,25 +1,9 @@
-use std::collections::HashMap;
-
 use reqwest::{Client, Url};
 
-use crate::{
-    config::OrgConfig,
-    repo::{Repository, RepositoryCommitData},
-    CommittedDataExtraction,
-};
-
-pub struct Org {
-    name: String,
-    url: Url,
-    repository_list: Vec<Repository>, // Network action
-}
-
-pub struct OrgCommitData {
-    committer_data: Vec<RepositoryCommitData>,
-}
+use crate::{config::OrgConfig, org::Org, repo::Repository};
 
 pub struct OrgFactory {
-    url: Url,
+    pub(crate) url: Url,
 }
 
 impl OrgFactory {
@@ -43,13 +27,6 @@ impl OrgFactory {
     }
 
     fn fetch_repository_list(client: &Client) -> Vec<Repository> {
-        todo!()
-    }
-}
-
-type RepoName = String;
-impl CommittedDataExtraction<HashMap<RepoName, OrgCommitData>> for Org {
-    fn committed_data(self) -> HashMap<RepoName, OrgCommitData> {
         todo!()
     }
 }

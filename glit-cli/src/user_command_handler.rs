@@ -2,6 +2,8 @@ use clap::ArgMatches;
 use glit_core::config::UserConfig;
 use reqwest::Url;
 
+use crate::utils::fix_input_url;
+
 pub struct UserCommandHandler {}
 
 impl UserCommandHandler {
@@ -11,14 +13,16 @@ impl UserCommandHandler {
             .unwrap()
             .as_str();
 
-        let verbose = subcommand_match
-            .get_one::<bool>("verbose")
-            .unwrap_or(&false)
+        let all_branches = subcommand_match
+            .get_one::<bool>("all_branches")
+            .unwrap()
             .to_owned();
 
+        let user_url = fix_input_url(user_url);
+
         UserConfig {
-            url: Url::parse(user_url).unwrap(),
-            verbose,
+            url: Url::parse(&user_url).unwrap(),
+            all_branches,
         }
     }
 }

@@ -10,6 +10,11 @@ impl GlobalOptionHandler {
             .unwrap_or(&false)
             .to_owned();
 
-        GlobalConfig { verbose }
+        let output = matches
+            .get_one::<String>("output")
+            .unwrap_or(&"".to_string())
+            .to_owned();
+
+        GlobalConfig { verbose, output }
     }
 }
