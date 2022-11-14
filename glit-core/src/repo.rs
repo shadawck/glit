@@ -255,10 +255,12 @@ impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Reposito
         let (tx, rx) = mpsc::channel();
 
         if self.clone_paths.len().eq(&1) {
-            // get log
-            // Build committer data for each log
             let path = self.clone_paths.first().unwrap();
-            let branch = self.branches.first().unwrap().to_owned();
+            let branch = self
+                .branches
+                .first()
+                .unwrap_or(&"Default (Master, Main)".to_string())
+                .to_owned();
             let repo_data = Log::build(path.to_path_buf());
 
             tx.send((branch, repo_data)).unwrap();
@@ -284,13 +286,13 @@ impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Reposito
 
                 handles.push(handle);
             }
-            drop(tx);
 
             handles
                 .into_iter()
                 .map(|handle| handle.join().unwrap())
                 .for_each(drop);
         }
+        drop(tx);
 
         rx.into_iter()
             .collect::<HashMap<String, RepositoryCommitData>>()
