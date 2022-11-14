@@ -46,7 +46,7 @@ impl Exporter<HashMap<String, UserCommitData>> {
             let mut path = PathBuf::from_str(&output).unwrap();
 
             if path.is_dir() {
-                path.set_file_name("repo.json");
+                path.set_file_name("user.json");
             }
 
             let json_value = serde_json::to_string_pretty(data).unwrap();
@@ -65,7 +65,7 @@ impl Exporter<HashMap<String, OrgCommitData>> {
             let mut path = PathBuf::from_str(&output).unwrap();
 
             if path.is_dir() {
-                path.set_file_name("repo.json");
+                path.set_file_name("org.json");
             }
 
             let json_value = serde_json::to_string_pretty(data).unwrap();

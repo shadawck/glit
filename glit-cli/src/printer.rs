@@ -34,7 +34,7 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
             for (branch, value) in data {
                 let branch_format = format!("[ Branch : {} ]", branch).yellow();
                 println!("{}", branch_format);
-                for (author, data) in &value.committer_data {
+                for (author, data) in &value.committers {
                     let mails = data.commit_list.keys().cloned().collect::<Vec<String>>();
                     print!("{}:", author.blue());
 
@@ -54,7 +54,7 @@ impl Printer<UserCommitData> {
         for (repo_name, value) in data {
             let repo_format = format!("[ Repository : {} ]", repo_name).magenta();
             println!("{}", repo_format);
-            printer.print_repo(&value.committer_data);
+            printer.print_repo(&value.repositories_data);
         }
     }
 }
@@ -64,7 +64,7 @@ impl Printer<OrgCommitData> {
         for (repo_name, value) in data {
             let repo_format = format!("[ Repository : {} ]", repo_name).magenta();
             println!("{}", repo_format);
-            printer.print_repo(&value.committer_data);
+            printer.print_repo(&value.branches);
         }
     }
 }

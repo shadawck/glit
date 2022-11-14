@@ -4,7 +4,6 @@ use futures::{future::join_all, stream, StreamExt};
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
-use url::quirks::host;
 
 const NUMBER_OF_REPO_PER_PAGE: u32 = 30;
 
@@ -28,11 +27,9 @@ pub struct OrgFactory {
 
 impl OrgFactory {
     pub fn with_config(org_config: OrgConfig) -> Self {
-        // https://github.com/apache
         let url = org_config.url;
         let all_branches: bool = org_config.all_branches;
 
-        // https://github.com/orgs/apache/repositories
         let mut path_segment = url.path_segments().unwrap();
         let org_name = path_segment.next().unwrap().to_string();
 
@@ -177,7 +174,7 @@ impl OrgFactory {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrgCommitData {
-    pub committer_data: HashMap<String, RepositoryCommitData>,
+    pub branches: HashMap<String, RepositoryCommitData>,
 }
 
 type RepoName = String;
@@ -191,9 +188,7 @@ impl CommittedDataExtraction<HashMap<RepoName, OrgCommitData>> for Org {
 
             let handle = thread::spawn(move || {
                 let commited = repository.clone().committed_data();
-                let user_commit_data = OrgCommitData {
-                    committer_data: commited,
-                };
+                let user_commit_data = OrgCommitData { branches: commited };
 
                 tx.send((repository.name, user_commit_data)).unwrap();
             });

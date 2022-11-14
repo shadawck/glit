@@ -55,7 +55,6 @@ impl RepositoryFactory {
 
     fn clone_multiple_branches(url: Url, name: String, branches: Vec<String>) -> Vec<PathBuf> {
         let name = name.replace("-", "_");
-        // Make it multithreaded
         let (tx, rx) = mpsc::channel();
         let mut handles = Vec::new();
 
@@ -102,7 +101,7 @@ impl RepositoryFactory {
         let owner = path_segments.next().unwrap().to_string();
 
         let name = path_segments.next().unwrap().to_string();
-        println!("Building {} repository...", name);
+        print!("Building {} repository...", name);
 
         let url = self.url;
 
@@ -111,14 +110,14 @@ impl RepositoryFactory {
         let clone_location =
             PathBuf::from_str(&format!("{}/{}_{}", DEFAULT_PATH, name, hash_suffix)).unwrap();
         // Always clone default (main/master branch)
-        let repo = Self::clone(url.clone(), clone_location.clone()).unwrap();
+        let repo: git2::Repository = Self::clone(url.clone(), clone_location.clone()).unwrap();
 
         let mut clone_paths: Vec<PathBuf> = Vec::new();
 
         if self.branches.is_empty() {
             // Select all branch
             if self.all_branches.eq(&true) {
-                let branches = repo
+                let mut branches = repo
                     .branches(Some(BranchType::Remote))
                     .unwrap()
                     .into_iter()
@@ -128,13 +127,14 @@ impl RepositoryFactory {
                             .name()
                             .unwrap()
                             .unwrap()
-                            .split("/")
+                            .split("origin/")
                             .last()
                             .unwrap()
                             .to_string()
                     })
-                    .collect::<Vec<String>>()[1..]
-                    .to_vec();
+                    .collect::<Vec<String>>();
+
+                branches.retain(|value| *value != "HEAD");
 
                 println!(" with branches {:?}", branches);
 
@@ -188,13 +188,13 @@ type AuthorName = String;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RepositoryCommitData {
-    pub committer_data: BTreeMap<AuthorName, Committer>,
+    pub committers: BTreeMap<AuthorName, Committer>,
 }
 
 impl RepositoryCommitData {
     pub fn new() -> Self {
         Self {
-            committer_data: BTreeMap::<AuthorName, Committer>::new(),
+            committers: BTreeMap::<AuthorName, Committer>::new(),
         }
     }
 
@@ -207,18 +207,17 @@ impl RepositoryCommitData {
         // To use only on first insertion
         let committer = Committer::new(mail.clone(), commit_id.to_string());
 
-        if self.committer_data.contains_key(&author) {
-            let mut existing_commiter = self.committer_data.get_mut(&author).unwrap().to_owned();
+        if self.committers.contains_key(&author) {
+            let mut existing_commiter = self.committers.get_mut(&author).unwrap().to_owned();
 
             if !existing_commiter.commit_list.contains_key(&mail) {
                 existing_commiter.commit_list.insert(mail.clone(), vec![]);
 
-                self.committer_data
-                    .insert(author.clone(), existing_commiter);
+                self.committers.insert(author.clone(), existing_commiter);
             }
 
             // Update commit_id list
-            let mut actual_committer = self.committer_data.get_mut(&author).unwrap().to_owned();
+            let mut actual_committer = self.committers.get_mut(&author).unwrap().to_owned();
             let mut commit_ids = actual_committer
                 .commit_list
                 .get_mut(&mail)
@@ -230,9 +229,9 @@ impl RepositoryCommitData {
 
             // insert modified version of commiter
             //println!("Insert new version of committer");
-            self.committer_data.insert(author, actual_committer);
+            self.committers.insert(author, actual_committer);
         } else {
-            self.committer_data.insert(author.clone(), committer);
+            self.committers.insert(author.clone(), committer);
             //println!("The author {} have been added", author.clone());
         }
 

@@ -173,7 +173,7 @@ impl UserFactory {
 type RepoName = String;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserCommitData {
-    pub committer_data: HashMap<RepoName, RepositoryCommitData>,
+    pub repositories_data: HashMap<RepoName, RepositoryCommitData>,
 }
 
 impl CommittedDataExtraction<HashMap<RepoName, UserCommitData>> for User {
@@ -187,7 +187,7 @@ impl CommittedDataExtraction<HashMap<RepoName, UserCommitData>> for User {
             let handle = thread::spawn(move || {
                 let commited = repository.clone().committed_data();
                 let user_commit_data = UserCommitData {
-                    committer_data: commited,
+                    repositories_data: commited,
                 };
 
                 tx.send((repository.name, user_commit_data)).unwrap();
