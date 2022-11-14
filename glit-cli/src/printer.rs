@@ -10,28 +10,24 @@ use glit_core::{
 
 pub struct Printer<T> {
     global_config: GlobalConfig,
-    repo: Repository,
     data: PhantomData<T>,
 }
 
 type AuthorName = String;
+type RepoName = String;
 
-impl Printer<HashMap<String, RepositoryCommitData>> {
-    pub fn new(global_config: GlobalConfig, repo: Repository) -> Self {
+impl<T> Printer<T> {
+    pub fn new(global_config: GlobalConfig) -> Self {
         Self {
             global_config,
-            repo,
             data: PhantomData::default(),
         }
     }
+}
 
-    pub fn with_repo(&mut self, repository: Repository) -> &Self {
-        self.repo = repository;
-        self
-    }
-
-    pub fn print(&self, data: &HashMap<AuthorName, RepositoryCommitData>) {
-        println!("Check mail for {} of {}", self.repo.name, self.repo.owner);
+impl Printer<HashMap<String, RepositoryCommitData>> {
+    pub fn print_repo(&self, data: &HashMap<AuthorName, RepositoryCommitData>) {
+        //println!("Check mail for {}", self.repo_name);
 
         if self.global_config.verbose {
         } else {
@@ -48,6 +44,27 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
                 }
                 println!("");
             }
+        }
+    }
+}
+
+impl Printer<UserCommitData> {
+    pub fn print_user(&self, data: &HashMap<RepoName, UserCommitData>) {
+        let printer = Printer::new(self.global_config.clone());
+        for (repo_name, value) in data {
+            let repo_format = format!("[ Repository : {} ]", repo_name).magenta();
+            println!("{}", repo_format);
+            printer.print_repo(&value.committer_data);
+        }
+    }
+}
+impl Printer<OrgCommitData> {
+    pub fn print_org(&self, data: &HashMap<RepoName, OrgCommitData>) {
+        let printer = Printer::new(self.global_config.clone());
+        for (repo_name, value) in data {
+            let repo_format = format!("[ Repository : {} ]", repo_name).magenta();
+            println!("{}", repo_format);
+            printer.print_repo(&value.committer_data);
         }
     }
 }
@@ -77,11 +94,4 @@ fn format_mail(mail: &str) -> String {
     } else {
         mail.green().to_string()
     }
-}
-
-impl Printer<UserCommitData> {
-    pub fn print() {}
-}
-impl Printer<OrgCommitData> {
-    pub fn print() {}
 }

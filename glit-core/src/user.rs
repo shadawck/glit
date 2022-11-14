@@ -4,6 +4,7 @@ use colored::Colorize;
 use futures::{future::join_all, stream, StreamExt};
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     config::{RepositoryConfig, UserConfig},
@@ -73,7 +74,7 @@ impl UserFactory {
 
     pub async fn create(self, client: &Client) -> User {
         let url = self.url;
-        let page_url = &self.page_url;
+        let page_url = self.page_url;
 
         let mut path_segment = url.path_segments().unwrap();
         let name = path_segment.next().unwrap().to_string();
@@ -99,7 +100,7 @@ impl UserFactory {
 
         User {
             name,
-            url: url.clone(),
+            url,
             repositories,
         }
     }
@@ -170,9 +171,9 @@ impl UserFactory {
 }
 
 type RepoName = String;
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserCommitData {
-    committer_data: HashMap<RepoName, RepositoryCommitData>,
+    pub committer_data: HashMap<RepoName, RepositoryCommitData>,
 }
 
 impl CommittedDataExtraction<HashMap<RepoName, UserCommitData>> for User {
@@ -184,8 +185,6 @@ impl CommittedDataExtraction<HashMap<RepoName, UserCommitData>> for User {
             let tx = mpsc::Sender::clone(&tx);
 
             let handle = thread::spawn(move || {
-                println!("Handling Repo : {}", repository.url);
-
                 let commited = repository.clone().committed_data();
                 let user_commit_data = UserCommitData {
                     committer_data: commited,

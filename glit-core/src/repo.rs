@@ -75,7 +75,7 @@ impl RepositoryFactory {
                 );
                 let location = Path::new(&path);
 
-                println!("Cloning branch : {} at {}", branch, path);
+                //println!("Cloning branch : {} at {}", branch, path);
                 RepoBuilder::new()
                     .bare(true)
                     .branch(&branch)
@@ -136,7 +136,7 @@ impl RepositoryFactory {
                     .collect::<Vec<String>>()[1..]
                     .to_vec();
 
-                println!("Remote {:?}", branches);
+                println!(" with branches {:?}", branches);
 
                 let new_paths =
                     Self::clone_multiple_branches(url.clone(), name.clone(), branches.clone());
@@ -259,14 +259,14 @@ impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Reposito
 
             remove_dir_all(self.clone_paths.first().unwrap()).unwrap();
         } else {
-            println!("{} {}", self.branches.len(), self.clone_paths.len());
+            //println!("{} {}", self.branches.len(), self.clone_paths.len());
 
             for val in self.branches.clone().into_iter().zip(self.clone_paths) {
                 let (br, pt) = val.clone();
                 let tx = mpsc::Sender::clone(&tx);
 
                 let handle = thread::spawn(move || {
-                    println!("Gathering data on branch : {} at {:?}", br, pt);
+                    //println!("Gathering data on branch : {} at {:?}", br, pt);
 
                     // log function
                     let repo_data = Log::build(pt.clone());

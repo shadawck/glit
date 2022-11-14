@@ -84,6 +84,8 @@ async fn main() {
                 .arg(
                     Arg::new("org_url")
                         .value_name("URL")
+                        .short('u')
+                        .long("url")
                         .help("Github url of an organisation."),
                 )
                 .arg(
@@ -125,22 +127,33 @@ async fn main() {
             let repo_extraction: HashMap<String, RepositoryCommitData> =
                 repository.clone().committed_data();
 
-            let printer = Printer::new(global_config.clone(), repository);
-            printer.print(&repo_extraction);
+            let printer = Printer::new(global_config.clone());
+            printer.print_repo(&repo_extraction);
+
             let exporter = Exporter::new(global_config);
-            exporter.export(&repo_extraction)
+            exporter.export_repo(&repo_extraction)
         }
         Some(("user", sub_match)) => {
             let user_config = UserCommandHandler::config(sub_match);
             let user: User = UserFactory::with_config(user_config).create(&client).await; //
             let user_extraction: HashMap<String, UserCommitData> = user.committed_data();
 
-            //println!("{:#?}", user_extraction);
+            let printer = Printer::new(global_config.clone());
+            printer.print_user(&user_extraction);
+
+            let exporter = Exporter::new(global_config.clone());
+            exporter.export_user(&user_extraction)
         }
         Some(("org", sub_match)) => {
             let org_config = OrgCommandHandler::config(sub_match);
-            let org: Org = OrgFactory::with_config(org_config).create(&client);
+            let org: Org = OrgFactory::with_config(org_config).create(&client).await;
             let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
+
+            let printer = Printer::new(global_config.clone());
+            printer.print_org(&org_extraction);
+
+            let exporter = Exporter::new(global_config.clone());
+            exporter.export_org(&org_extraction)
         }
         _ => {}
     }
