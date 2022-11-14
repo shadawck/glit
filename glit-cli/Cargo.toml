@@ -1,0 +1,13 @@
+[package]
+name = "glit-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+reqwest = { version = "0.11.12" }
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+clap = { version = "4.0.12", features = ["cargo"] }
+futures = "0.3.24"
+lazy_static = "1.4.0"
+glit-core = { version = "0.1.0", path = "../glit-core" }
+colored = "2.0.0"
