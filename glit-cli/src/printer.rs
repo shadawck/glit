@@ -1,11 +1,9 @@
-use std::{collections::HashMap, marker::PhantomData};
+use ahash::HashMap;
+use std::marker::PhantomData;
 
 use colored::Colorize;
 use glit_core::{
-    config::GlobalConfig,
-    org::OrgCommitData,
-    repo::{Repository, RepositoryCommitData},
-    user::UserCommitData,
+    config::GlobalConfig, org::OrgCommitData, repo::RepositoryCommitData, user::UserCommitData,
 };
 
 pub struct Printer<T> {
@@ -36,13 +34,13 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
                 println!("{}", branch_format);
                 for (author, data) in &value.committers {
                     let mails = data.commit_list.keys().cloned().collect::<Vec<String>>();
-                    print!("{}:", author.blue());
+                    print!("{}:", author.trim().blue());
 
-                    print_mail(mails, author);
+                    print_mail(mails, author.trim());
 
-                    println!("");
+                    println!();
                 }
-                println!("");
+                println!();
             }
         }
     }
@@ -75,15 +73,15 @@ fn print_mail(mails: Vec<String>, author: &str) {
         let fmail = format_mail(mail);
         print!(" {}", fmail)
     } else {
-        let author_string_len = author.len() + 1;
+        let author_string_len = author.len() + 2;
         let padding = " ".repeat(author_string_len);
         let mail = mails.first().unwrap().trim();
         let fmail = format_mail(mail);
 
         println!(" {}", fmail);
-        for mail in mails[1..].to_vec() {
-            let fmail = format_mail(mail.as_str());
-            print!("{} {} ", padding, fmail);
+        for mail in mails[1..].iter() {
+            let fmail = format_mail(mail.trim());
+            print!("{}{}", padding, fmail);
         }
     }
 }

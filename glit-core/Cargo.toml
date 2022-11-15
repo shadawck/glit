@@ -2,6 +2,14 @@
 name = "glit-core"
 version = "0.1.0"
 edition = "2021"
+authors = ["shadawck <shadawck@protonmail.com>"]
+description = "Core - Retrieve all mail related to a git repository, user, or organization"
+readme = "README.md"
+repository = "https://github.com/shadawck/glit"
+homepage = "https://github.com/shadawck/glit"
+license = "MIT OR Apache-2.0"
+keywords = ["osint", "security", "mail", "git"]
+categories = ["command-line-utilities", "email"]
 
 [dependencies]
 reqwest = { version = "0.11.12" }
@@ -16,4 +24,7 @@ ahash = "0.8.2"
 serde = { version = "1.0.147", features = ["derive"] }
 colored = "2.0.0"
 
-[lib]
+[profile.release]
+lto = true
+opt-level = 3
+panic = "unwind"

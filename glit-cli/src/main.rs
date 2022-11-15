@@ -6,7 +6,7 @@ pub mod repository_command_handler;
 pub mod user_command_handler;
 pub mod utils;
 
-use std::collections::HashMap;
+use ahash::HashMap;
 
 use exporter::Exporter;
 use glit_core::{
@@ -20,7 +20,7 @@ use global_option_handler::GlobalOptionHandler;
 use org_command_handler::OrgCommandHandler;
 use printer::Printer;
 use repository_command_handler::RepoCommandHandler;
-use reqwest::{Client, ClientBuilder};
+use reqwest::ClientBuilder;
 use user_command_handler::UserCommandHandler;
 
 use clap::{crate_version, Arg, Command};
@@ -122,10 +122,9 @@ async fn main() {
     match matches.subcommand() {
         Some(("repo", sub_match)) => {
             let repository_config = RepoCommandHandler::config(sub_match);
-            let repository: Repository =
-                RepositoryFactory::with_config(repository_config.clone()).create();
+            let repository: Repository = RepositoryFactory::with_config(repository_config).create();
             let repo_extraction: HashMap<String, RepositoryCommitData> =
-                repository.clone().committed_data();
+                repository.committed_data();
 
             let printer = Printer::new(global_config.clone());
             printer.print_repo(&repo_extraction);

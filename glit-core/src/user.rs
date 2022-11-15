@@ -1,4 +1,5 @@
-use std::{collections::HashMap, sync::mpsc, thread};
+use ahash::HashMap;
+use std::{sync::mpsc, thread};
 
 use colored::Colorize;
 use futures::{future::join_all, stream, StreamExt};
@@ -83,7 +84,7 @@ impl UserFactory {
         let pages_count = Self::pages_count(repo_count);
 
         println!(
-            "User {} have {} to process.\nBuilding repositories urls ...",
+            "User {} have {} repositories to process.\nBuilding repositories urls ...",
             name.clone().blue(),
             repo_count.to_string().yellow()
         );
@@ -91,7 +92,7 @@ impl UserFactory {
         let mut pages_urls = Vec::new();
 
         for i in 1..pages_count + 1 {
-            let url = format!("{}&page={}", page_url.to_string(), i);
+            let url = format!("{}&page={}", page_url, i);
             pages_urls.push(Url::parse(&url).unwrap());
         }
 
@@ -116,7 +117,7 @@ impl UserFactory {
                 let client = client.clone();
                 let base_url = base_url.clone();
 
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     let client = &client.clone();
 
                     let resp = client.get(url).send().await.unwrap();
@@ -133,7 +134,7 @@ impl UserFactory {
                         .map(|l| {
                             let endpoint_url = l.value().attr("href").unwrap().to_string();
 
-                            let repo_name = endpoint_url.split("/").last().unwrap();
+                            let repo_name = endpoint_url.split('/').last().unwrap();
 
                             let repo_url = format!("{}{}/", base_url, repo_name);
 
@@ -144,29 +145,29 @@ impl UserFactory {
                     repositories
                 })
                 .await
-                .unwrap();
-
-                handle
+                .unwrap()
             })
             .buffer_unordered(8)
             .collect::<Vec<Vec<Url>>>();
 
-        let to_join = content
-            .await
-            .into_iter()
-            .flatten()
-            .map(|u| async {
-                let repo_config = RepositoryConfig {
-                    url: u,
-                    branchs: Vec::new(),
-                    all_branches,
-                };
+        join_all(
+            content
+                .await
+                .into_iter()
+                .flatten()
+                .map(|u| async {
+                    let repo_config = RepositoryConfig {
+                        url: u,
+                        branchs: Vec::new(),
+                        all_branches,
+                    };
 
-                RepositoryFactory::with_config(repo_config).create()
-            })
-            .collect::<Vec<_>>();
-
-        join_all(to_join.into_iter().map(|x| async { x.await })).await
+                    RepositoryFactory::with_config(repo_config).create()
+                })
+                .into_iter()
+                .map(|x| async { x.await }),
+        )
+        .await
     }
 }
 

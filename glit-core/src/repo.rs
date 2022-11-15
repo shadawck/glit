@@ -1,11 +1,12 @@
 use std::{
     collections::BTreeMap,
-    collections::HashMap,
     fs::remove_dir_all,
     path::{Path, PathBuf},
     str::FromStr,
     thread,
 };
+
+use ahash::HashMap;
 
 use rand::distributions::{Alphanumeric, DistString};
 use serde::{Deserialize, Serialize};
@@ -50,11 +51,11 @@ impl RepositoryFactory {
     fn clone(url: Url, path: PathBuf) -> Result<git2::Repository, git2::Error> {
         RepoBuilder::new()
             .bare(true)
-            .clone(url.as_str(), &path.as_path())
+            .clone(url.as_str(), path.as_path())
     }
 
     fn clone_multiple_branches(url: Url, name: String, branches: Vec<String>) -> Vec<PathBuf> {
-        let name = name.replace("-", "_");
+        let name = name.replace('-', "_");
         let (tx, rx) = mpsc::channel();
         let mut handles = Vec::new();
 
@@ -68,17 +69,18 @@ impl RepositoryFactory {
                 let path = format!(
                     "{}/{}_{}_{}",
                     DEFAULT_PATH,
-                    name.clone(),
-                    branch.replace("/", "_").as_str(),
+                    name,
+                    branch.replace('/', "_").as_str(),
                     hash_suffix
                 );
+
                 let location = Path::new(&path);
 
                 //println!("Cloning branch : {} at {}", branch, path);
                 RepoBuilder::new()
                     .bare(true)
                     .branch(&branch)
-                    .clone(url.clone().as_str(), location.clone())
+                    .clone(url.clone().as_str(), location)
                     .unwrap();
 
                 tx.send(location.to_path_buf()).unwrap();
@@ -189,6 +191,12 @@ type AuthorName = String;
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RepositoryCommitData {
     pub committers: BTreeMap<AuthorName, Committer>,
+}
+
+impl Default for RepositoryCommitData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RepositoryCommitData {

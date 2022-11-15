@@ -17,7 +17,7 @@ impl RepoCommandHandler {
             .get_one::<String>("branch")
             .unwrap_or(&String::new())
             .to_owned()
-            .split_terminator(",")
+            .split_terminator(',')
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
 

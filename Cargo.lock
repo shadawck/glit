@@ -399,11 +399,11 @@ dependencies = [
 name = "glit-cli"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "clap",
  "colored",
  "futures",
  "glit-core",
- "lazy_static",
  "reqwest",
  "serde_json",
  "tokio",
