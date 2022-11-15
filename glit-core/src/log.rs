@@ -16,6 +16,7 @@ impl Log {
 
         revwalk.push_head().unwrap();
 
+        println!("Build log for {:#?}", path);
         for commit_id in revwalk {
             let commit_id = commit_id.unwrap();
 

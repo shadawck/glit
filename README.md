@@ -33,4 +33,3 @@ Fetch emails of all user/committer from all repositories of an organization.
 ```bash
 glit org -a -u https://github.com/rust-lang
 ```
-

@@ -1,6 +1,7 @@
 use colored::Colorize;
 
 use ahash::HashMap;
+
 use glit_core::{
     config::GlobalConfig, org::OrgCommitData, repo::RepositoryCommitData, user::UserCommitData,
 };

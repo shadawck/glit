@@ -1,8 +1,10 @@
-use ahash::HashMap;
 use std::{sync::mpsc, thread};
 
+//use std::collections::HashMap;
+use ahash::HashMap;
+
 use colored::Colorize;
-use futures::{future::join_all, stream, StreamExt};
+use futures::future::join_all;
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
@@ -18,7 +20,7 @@ const NUMBER_OF_REPO_PER_PAGE: u32 = 30;
 pub struct User {
     name: String,
     url: Url,
-    repositories: Vec<Repository>, // Network action
+    repositories: Vec<Repository>,
 }
 
 pub struct UserFactory {
@@ -112,7 +114,7 @@ impl UserFactory {
         pages_urls: Vec<Url>,
         all_branches: bool,
     ) -> Vec<Repository> {
-        let mut handles = Vec::new();
+        let mut tokio_handles = Vec::new();
 
         let (tx, rx) = mpsc::channel();
 
@@ -151,18 +153,19 @@ impl UserFactory {
                     .for_each(drop);
             });
 
-            handles.push(handle);
+            tokio_handles.push(handle);
         }
-        drop(tx);
 
-        join_all(handles).await;
+        drop(tx);
+        join_all(tokio_handles).await;
 
         let urls = rx.into_iter().collect::<Vec<Url>>();
 
+        let mut thread_handles = Vec::new();
         let (tx, rx) = mpsc::channel();
         for u in urls {
             let tx = mpsc::Sender::clone(&tx);
-            thread::spawn(move || {
+            let handle = thread::spawn(move || {
                 let repo_config = RepositoryConfig {
                     url: u,
                     branchs: Vec::new(),
@@ -173,7 +176,13 @@ impl UserFactory {
 
                 tx.send(repo).unwrap()
             });
+
+            thread_handles.push(handle);
         }
+        thread_handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .for_each(drop);
         drop(tx);
 
         rx.into_iter().collect::<Vec<Repository>>()
@@ -209,7 +218,6 @@ impl CommittedDataExtraction<HashMap<RepoName, UserCommitData>> for User {
             .into_iter()
             .map(|handle| handle.join().unwrap())
             .for_each(drop);
-
         drop(tx);
 
         rx.into_iter().collect::<HashMap<String, UserCommitData>>()

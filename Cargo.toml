@@ -1,2 +1,7 @@
 [workspace]
 members = ["glit-core", "glit-cli"]
+
+[profile.release]
+lto = true
+opt-level = 3
+panic = "unwind"

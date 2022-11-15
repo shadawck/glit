@@ -23,8 +23,3 @@ rand = "0.8.5"
 ahash = "0.8.2"
 serde = { version = "1.0.147", features = ["derive"] }
 colored = "2.0.0"
-
-[profile.release]
-lto = true
-opt-level = 3
-panic = "unwind"

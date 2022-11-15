@@ -1,7 +1,8 @@
-use std::{sync::mpsc, thread};
+use std::{sync::mpsc, thread, time::Instant};
 
 use ahash::HashMap;
-use futures::{future::join_all, stream, StreamExt};
+//use std::collections::HashMap;
+use futures::future::join_all;
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
@@ -114,14 +115,14 @@ impl OrgFactory {
         pages_urls: Vec<Url>,
         all_branches: bool,
     ) -> Vec<Repository> {
-        let mut handles = Vec::new();
+        let mut tokio_handles = Vec::new();
 
         let (tx, rx) = mpsc::channel();
 
         for page in pages_urls {
             let client = client.clone();
             let base_url = base_url.clone();
-            let tx = mpsc::Sender::clone(&tx);
+            let tx = tx.clone();
 
             let handle = tokio::spawn(async move {
                 let client = &client.clone();
@@ -154,18 +155,18 @@ impl OrgFactory {
                     .for_each(drop);
             });
 
-            handles.push(handle);
+            tokio_handles.push(handle);
         }
+        join_all(tokio_handles).await;
         drop(tx);
 
-        join_all(handles).await;
+        let urls = rx.try_iter().collect::<Vec<Url>>();
 
-        let urls = rx.into_iter().collect::<Vec<Url>>();
-
+        let mut thread_handle = Vec::new();
         let (tx, rx) = mpsc::channel();
-        for u in urls {
+        for u in urls.clone() {
             let tx = mpsc::Sender::clone(&tx);
-            thread::spawn(move || {
+            let handle = thread::spawn(move || {
                 let repo_config = RepositoryConfig {
                     url: u,
                     branchs: Vec::new(),
@@ -174,11 +175,32 @@ impl OrgFactory {
 
                 let repo = RepositoryFactory::with_config(repo_config).create();
 
-                tx.send(repo).unwrap()
+                tx.send(repo).unwrap();
             });
+
+            thread_handle.push(handle);
         }
+        thread_handle
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .for_each(drop);
         drop(tx);
 
+        // ---- Rayon impl - No Gain
+        //let start_b = Instant::now();
+        //let b = urls
+        //    .into_par_iter()
+        //    .map(|u| {
+        //        let repo_config = RepositoryConfig {
+        //            url: u,
+        //            branchs: Vec::new(),
+        //            all_branches,
+        //        };
+        //
+        //        RepositoryFactory::with_config(repo_config).create()
+        //    })
+        //    .collect::<Vec<Repository>>();
+        //println!("Duration with rayon : {:#?}", start_b.elapsed());
         rx.into_iter().collect::<Vec<Repository>>()
     }
 }
@@ -191,7 +213,7 @@ pub struct OrgCommitData {
 type RepoName = String;
 impl CommittedDataExtraction<HashMap<RepoName, OrgCommitData>> for Org {
     fn committed_data(self) -> HashMap<RepoName, OrgCommitData> {
-        let mut handles = vec![];
+        let mut thread_handles = Vec::new();
         let (tx, rx) = mpsc::channel();
 
         for repository in self.repositories {
@@ -204,13 +226,13 @@ impl CommittedDataExtraction<HashMap<RepoName, OrgCommitData>> for Org {
                 tx.send((repository.name, user_commit_data)).unwrap();
             });
 
-            handles.push(handle);
+            thread_handles.push(handle);
         }
-        handles
+
+        thread_handles
             .into_iter()
             .map(|handle| handle.join().unwrap())
             .for_each(drop);
-
         drop(tx);
 
         rx.into_iter().collect::<HashMap<String, OrgCommitData>>()

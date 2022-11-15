@@ -88,12 +88,11 @@ impl RepositoryFactory {
 
             handles.push(handle);
         }
-        drop(tx);
-
         handles
             .into_iter()
             .map(|handle| handle.join().unwrap())
             .for_each(drop);
+        drop(tx);
 
         rx.into_iter().collect::<Vec<PathBuf>>()
     }
@@ -103,7 +102,7 @@ impl RepositoryFactory {
         let owner = path_segments.next().unwrap().to_string();
 
         let name = path_segments.next().unwrap().to_string();
-        print!("Building {} repository...", name);
+        print!("Building {} repository... ", name);
 
         let url = self.url;
 
@@ -138,7 +137,7 @@ impl RepositoryFactory {
 
                 branches.retain(|value| *value != "HEAD");
 
-                println!(" with branches {:?}", branches);
+                println!("with branches {:?}", branches);
 
                 let new_paths =
                     Self::clone_multiple_branches(url.clone(), name.clone(), branches.clone());
@@ -250,7 +249,6 @@ impl RepositoryCommitData {
 impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Repository {
     fn committed_data(self) -> HashMap<String, RepositoryCommitData> {
         let mut handles = vec![];
-
         let (tx, rx) = mpsc::channel();
 
         if self.clone_paths.len().eq(&1) {
@@ -260,13 +258,17 @@ impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Reposito
                 .first()
                 .unwrap_or(&"Default (Master, Main)".to_string())
                 .to_owned();
+
             let repo_data = Log::build(path.to_path_buf());
-
             tx.send((branch, repo_data)).unwrap();
-
             remove_dir_all(self.clone_paths.first().unwrap()).unwrap();
         } else {
-            for val in self.branches.clone().into_iter().zip(self.clone_paths) {
+            for val in self
+                .branches
+                .clone()
+                .into_iter()
+                .zip(self.clone_paths.clone())
+            {
                 let (br, pt) = val.clone();
                 let tx = mpsc::Sender::clone(&tx);
 
@@ -284,9 +286,22 @@ impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Reposito
                 .into_iter()
                 .map(|handle| handle.join().unwrap())
                 .for_each(drop);
-        }
-        drop(tx);
 
+            // Test with rayon - no gain
+            //self.branches
+            //    .clone()
+            //    .par_iter()
+            //    .zip(self.clone_paths)
+            //    .map(|(br, pt)| {
+            //        let repo_data = Log::build(pt.clone());
+            //        remove_dir_all(pt).unwrap();
+            //
+            //        (br.to_string(), repo_data)
+            //    })
+            //    .collect::<HashMap<_, _>>()
+        }
+
+        drop(tx);
         rx.into_iter()
             .collect::<HashMap<String, RepositoryCommitData>>()
     }

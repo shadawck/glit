@@ -6,7 +6,9 @@ pub mod repository_command_handler;
 pub mod user_command_handler;
 pub mod utils;
 
+//use ahash::HashMap;
 use ahash::HashMap;
+use std::time::Instant;
 
 use exporter::Exporter;
 use glit_core::{
@@ -30,7 +32,7 @@ async fn main() {
     let matches = Command::new("glit")
         .version(crate_version!())
         .author("Shadawck <shadawck@protonmail.com>")
-        .about("Osint tool - Extract mail from git.")
+        .about("Osint tool - Extract mail from repository/user/organization by crawling commit metadata.")
         //.arg(
         //    Arg::new("proxy")
         //        .short('x')
@@ -55,7 +57,7 @@ async fn main() {
         )
         .subcommand(
             Command::new("repo")
-                .about("Extract emails from repository by crawling commit metadata.")
+                .about("Extract emails from repository")
                 .arg(
                     Arg::new("repo_url")
                         .value_name("URL")
@@ -68,6 +70,7 @@ async fn main() {
                         .short('b')
                         .long("branch")
                         .help("Select a specific branch (default : master | main)")
+                        .conflicts_with("all_branches")
                         .num_args(1..),
                 )
                 .arg(
@@ -75,6 +78,7 @@ async fn main() {
                         .short('a')
                         .long("all-branches")
                         .help("Get all branch of the repo")
+                        .conflicts_with("branch")
                         .num_args(0),
                 ),
         )
@@ -116,6 +120,7 @@ async fn main() {
         )
         .get_matches();
 
+    // Use governor to limit client query
     let client = ClientBuilder::new().build().unwrap();
     let global_config = GlobalOptionHandler::config(&matches);
 
@@ -123,18 +128,23 @@ async fn main() {
         Some(("repo", sub_match)) => {
             let repository_config = RepoCommandHandler::config(sub_match);
             let repository: Repository = RepositoryFactory::with_config(repository_config).create();
+
+            let start = Instant::now();
             let repo_extraction: HashMap<String, RepositoryCommitData> =
                 repository.committed_data();
+            let duration = start.elapsed();
+
+            println!("Duration with mpsc channel : {:?}", duration);
 
             let printer = Printer::new(global_config.clone());
             printer.print_repo(&repo_extraction);
-
+            
             let exporter = Exporter::new(global_config);
             exporter.export_repo(&repo_extraction)
         }
         Some(("user", sub_match)) => {
             let user_config = UserCommandHandler::config(sub_match);
-            let user: User = UserFactory::with_config(user_config).create(&client).await; //
+            let user: User = UserFactory::with_config(user_config).create(&client).await;
             let user_extraction: HashMap<String, UserCommitData> = user.committed_data();
 
             let printer = Printer::new(global_config.clone());
@@ -150,7 +160,7 @@ async fn main() {
 
             let printer = Printer::new(global_config.clone());
             printer.print_org(&org_extraction);
-
+            
             let exporter = Exporter::new(global_config.clone());
             exporter.export_org(&org_extraction)
         }
