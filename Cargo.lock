@@ -396,7 +396,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "glit-cli"
+name = "glit"
 version = "0.1.0"
 dependencies = [
  "ahash",

@@ -112,62 +112,71 @@ impl UserFactory {
         pages_urls: Vec<Url>,
         all_branches: bool,
     ) -> Vec<Repository> {
-        let content = stream::iter(pages_urls)
-            .map(|url| async {
-                let client = client.clone();
-                let base_url = base_url.clone();
+        let mut handles = Vec::new();
 
-                tokio::spawn(async move {
-                    let client = &client.clone();
+        let (tx, rx) = mpsc::channel();
 
-                    let resp = client.get(url).send().await.unwrap();
-                    let text = resp.text().await.unwrap();
+        for page in pages_urls {
+            let client = client.clone();
+            let base_url = base_url.clone();
+            let tx = mpsc::Sender::clone(&tx);
 
-                    let parser = Html::parse_document(&text);
-                    let selector_repositories_url = Selector::parse(
-                        r#"turbo-frame > div > div > ul > li > div > div > h3 > a"#,
-                    )
-                    .unwrap();
+            let handle = tokio::spawn(async move {
+                let client = &client.clone();
 
-                    let repositories = parser
-                        .select(&selector_repositories_url)
-                        .map(|l| {
-                            let endpoint_url = l.value().attr("href").unwrap().to_string();
+                let resp = client.get(page).send().await.unwrap();
+                let text = resp.text().await.unwrap();
 
-                            let repo_name = endpoint_url.split('/').last().unwrap();
+                let parser = Html::parse_document(&text);
+                let selector_repositories_url =
+                    Selector::parse(r#"turbo-frame > div > div > ul > li > div > div > h3 > a"#)
+                        .unwrap();
 
-                            let repo_url = format!("{}{}/", base_url, repo_name);
+                parser
+                    .select(&selector_repositories_url)
+                    .map(|l| {
+                        let endpoint_url = l.value().attr("href").unwrap().to_string();
 
-                            Url::parse(&repo_url).unwrap()
-                        })
-                        .collect::<Vec<Url>>();
+                        let repo_name = endpoint_url.split('/').last().unwrap();
 
-                    repositories
-                })
-                .await
-                .unwrap()
-            })
-            .buffer_unordered(8)
-            .collect::<Vec<Vec<Url>>>();
+                        let repo_url = format!("{}{}/", base_url, repo_name);
 
-        join_all(
-            content
-                .await
-                .into_iter()
-                .flatten()
-                .map(|u| async {
-                    let repo_config = RepositoryConfig {
-                        url: u,
-                        branchs: Vec::new(),
-                        all_branches,
-                    };
+                        println!("repo_url : {}", repo_url);
 
-                    RepositoryFactory::with_config(repo_config).create()
-                })
-                .into_iter()
-                .map(|x| async { x.await }),
-        )
-        .await
+                        let url = Url::parse(&repo_url).unwrap();
+                        println!("u: {}", url);
+
+                        tx.send(url).unwrap();
+                    })
+                    .for_each(drop);
+            });
+
+            handles.push(handle);
+        }
+        drop(tx);
+
+        join_all(handles).await;
+
+        let urls = rx.into_iter().collect::<Vec<Url>>();
+
+        let (tx, rx) = mpsc::channel();
+        for u in urls {
+            let tx = mpsc::Sender::clone(&tx);
+            thread::spawn(move || {
+                let repo_config = RepositoryConfig {
+                    url: u,
+                    branchs: Vec::new(),
+                    all_branches,
+                };
+
+                let repo = RepositoryFactory::with_config(repo_config).create();
+
+                tx.send(repo).unwrap()
+            });
+        }
+        drop(tx);
+
+        rx.into_iter().collect::<Vec<Repository>>()
     }
 }
 

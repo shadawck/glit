@@ -1,5 +1,5 @@
 [package]
-name = "glit-cli"
+name = "glit"
 version = "0.1.0"
 edition = "2021"
 authors = ["shadawck <shadawck@protonmail.com>"]

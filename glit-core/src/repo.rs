@@ -76,7 +76,7 @@ impl RepositoryFactory {
 
                 let location = Path::new(&path);
 
-                //println!("Cloning branch : {} at {}", branch, path);
+                println!("Cloning branch : {} at {}", branch, path);
                 RepoBuilder::new()
                     .bare(true)
                     .branch(&branch)
@@ -147,7 +147,10 @@ impl RepositoryFactory {
                 clone_paths.extend(new_paths);
                 remove_dir_all(clone_location).unwrap();
             } else {
+                // Clone only default branch
+                println!("Cloning repository : {}", name);
                 clone_paths.push(clone_location);
+                // ... do not delete master
             }
         } else {
             // Select multiple branch (User)
@@ -168,8 +171,7 @@ impl RepositoryFactory {
     }
 }
 
-type Mail = String; // A mail appear ...
-                    // ... in a list of commit identified by a hash
+type Mail = String; // A mail appear in a list of commit identified by a hash
 
 // A Person commiting with his name and all the commit he pushed
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -236,11 +238,9 @@ impl RepositoryCommitData {
             actual_committer.commit_list.insert(mail, commit_ids);
 
             // insert modified version of commiter
-            //println!("Insert new version of committer");
             self.committers.insert(author, actual_committer);
         } else {
             self.committers.insert(author.clone(), committer);
-            //println!("The author {} have been added", author.clone());
         }
 
         self.to_owned()
@@ -266,20 +266,14 @@ impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Reposito
 
             remove_dir_all(self.clone_paths.first().unwrap()).unwrap();
         } else {
-            //println!("{} {}", self.branches.len(), self.clone_paths.len());
-
             for val in self.branches.clone().into_iter().zip(self.clone_paths) {
                 let (br, pt) = val.clone();
                 let tx = mpsc::Sender::clone(&tx);
 
                 let handle = thread::spawn(move || {
-                    //println!("Gathering data on branch : {} at {:?}", br, pt);
-
-                    // log function
                     let repo_data = Log::build(pt.clone());
                     tx.send((br, repo_data)).unwrap();
 
-                    // Cleanup
                     remove_dir_all(pt).unwrap();
                 });
 

@@ -8,7 +8,7 @@ pub struct RepoCommandHandler {}
 
 impl RepoCommandHandler {
     pub fn config(subcommand_match: &ArgMatches) -> RepositoryConfig {
-        let input_repository_url = subcommand_match
+        let repo_url = subcommand_match
             .get_one::<String>("repo_url")
             .unwrap()
             .as_str();
@@ -26,7 +26,7 @@ impl RepoCommandHandler {
             .unwrap()
             .to_owned();
 
-        let repository_url = fix_input_url(input_repository_url);
+        let repository_url = fix_input_url(repo_url);
 
         // Fail fast -> Check repository and branch existence
 
