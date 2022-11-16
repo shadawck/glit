@@ -8,7 +8,7 @@ pub mod utils;
 
 //use ahash::HashMap;
 use ahash::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use exporter::Exporter;
 use glit_core::{
@@ -129,16 +129,12 @@ async fn main() {
             let repository_config = RepoCommandHandler::config(sub_match);
             let repository: Repository = RepositoryFactory::with_config(repository_config).create();
 
-            let start = Instant::now();
             let repo_extraction: HashMap<String, RepositoryCommitData> =
                 repository.committed_data();
-            let duration = start.elapsed();
-
-            println!("Duration with mpsc channel : {:?}", duration);
 
             let printer = Printer::new(global_config.clone());
             printer.print_repo(&repo_extraction);
-            
+
             let exporter = Exporter::new(global_config);
             exporter.export_repo(&repo_extraction)
         }
@@ -154,13 +150,14 @@ async fn main() {
             exporter.export_user(&user_extraction)
         }
         Some(("org", sub_match)) => {
+            println!("start");
             let org_config = OrgCommandHandler::config(sub_match);
             let org: Org = OrgFactory::with_config(org_config).create(&client).await;
             let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
 
             let printer = Printer::new(global_config.clone());
             printer.print_org(&org_extraction);
-            
+
             let exporter = Exporter::new(global_config.clone());
             exporter.export_org(&org_extraction)
         }

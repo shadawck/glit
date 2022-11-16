@@ -9,6 +9,7 @@ use std::{
 use ahash::HashMap;
 
 use rand::distributions::{Alphanumeric, DistString};
+use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use std::sync::mpsc;
@@ -139,7 +140,8 @@ impl RepositoryFactory {
                 clone_paths.extend(new_paths);
                 remove_dir_all(clone_location).unwrap();
             } else {
-                // Default branch is already loned
+                // Default branch is already cloned
+                self.branches = vec![String::from("main")];
                 clone_paths.push(clone_location);
                 // ... do not delete master
             }
@@ -240,56 +242,55 @@ impl RepositoryCommitData {
 
 impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Repository {
     fn committed_data(self) -> HashMap<String, RepositoryCommitData> {
-        let mut handles = vec![];
-        let (tx, rx) = mpsc::channel();
+        //let mut handles = vec![];
+        //let (tx, rx) = mpsc::channel();
 
-        if self.clone_paths.len().eq(&1) {
-            let path = self.clone_paths.first().unwrap();
-            let branch = self
-                .branches
-                .first()
-                .unwrap_or(&"Default (Master, Main)".to_string())
-                .to_owned();
+        //if self.clone_paths.len().eq(&1) {
+        //    let path = self.clone_paths.first().unwrap();
+        //    let branch = self
+        //        .branches
+        //        .first()
+        //        .unwrap_or(&"Default (Master, Main)".to_string())
+        //        .to_owned();
+        //
+        //    let repo_data = Log::build(path.to_path_buf());
+        //    tx.send((branch, repo_data)).unwrap();
+        //    remove_dir_all(self.clone_paths.first().unwrap()).unwrap();
+        //} else {
+        //    for val in self.branches.clone().into_iter().zip(self.clone_paths) {
+        //        let (br, pt) = val.clone();
+        //        let tx = mpsc::Sender::clone(&tx);
+        //
+        //        let handle = thread::spawn(move || {
+        //            let repo_data = Log::build(pt.clone());
+        //            tx.send((br, repo_data)).unwrap();
+        //
+        //            remove_dir_all(pt).unwrap();
+        //        });
+        //
+        //        handles.push(handle);
+        //    }
+        //
+        //    handles
+        //        .into_iter()
+        //        .map(|handle| handle.join().unwrap())
+        //        .for_each(drop);
 
-            let repo_data = Log::build(path.to_path_buf());
-            tx.send((branch, repo_data)).unwrap();
-            remove_dir_all(self.clone_paths.first().unwrap()).unwrap();
-        } else {
-            for val in self.branches.clone().into_iter().zip(self.clone_paths) {
-                let (br, pt) = val.clone();
-                let tx = mpsc::Sender::clone(&tx);
+        // Test with rayon - no gain
+        self.branches
+            .clone()
+            .par_iter()
+            .zip(self.clone_paths)
+            .map(|(br, pt)| {
+                let repo_data = Log::build(pt.clone());
+                remove_dir_all(pt).unwrap();
 
-                let handle = thread::spawn(move || {
-                    let repo_data = Log::build(pt.clone());
-                    tx.send((br, repo_data)).unwrap();
-
-                    remove_dir_all(pt).unwrap();
-                });
-
-                handles.push(handle);
-            }
-
-            handles
-                .into_iter()
-                .map(|handle| handle.join().unwrap())
-                .for_each(drop);
-
-            // Test with rayon - no gain
-            //self.branches
-            //    .clone()
-            //    .par_iter()
-            //    .zip(self.clone_paths)
-            //    .map(|(br, pt)| {
-            //        let repo_data = Log::build(pt.clone());
-            //        remove_dir_all(pt).unwrap();
-            //
-            //        (br.to_string(), repo_data)
-            //    })
-            //    .collect::<HashMap<_, _>>()
-        }
-
-        drop(tx);
-        rx.into_iter()
-            .collect::<HashMap<String, RepositoryCommitData>>()
+                (br.to_string(), repo_data)
+            })
+            .collect::<HashMap<_, _>>()
     }
+
+    //drop(tx);
+    //rx.into_iter()
+    //    .collect::<HashMap<String, RepositoryCommitData>>()
 }
