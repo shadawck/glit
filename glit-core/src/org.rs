@@ -1,8 +1,9 @@
-use std::{sync::mpsc, thread, time::Instant};
+use std::{sync::mpsc, thread};
 
 use ahash::HashMap;
 //use std::collections::HashMap;
 use futures::future::join_all;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
@@ -99,13 +100,82 @@ impl OrgFactory {
         }
 
         let repositories =
-            Self::fetch_repository_list(client, url.clone(), pages_urls, self.all_branches).await;
+            Self::fetch_repository_list_rayon(client, url.clone(), pages_urls, self.all_branches)
+                .await;
 
         Org {
             name,
             url,
             repositories,
         }
+    }
+
+    // TODO: Duplicate with user.rs
+    async fn fetch_repository_list_rayon(
+        client: &Client,
+        base_url: Url,
+        pages_urls: Vec<Url>,
+        all_branches: bool,
+    ) -> Vec<Repository> {
+        let mut tokio_handles = Vec::new();
+
+        let (tx, rx) = mpsc::channel();
+
+        for page in pages_urls {
+            let client = client.clone();
+            let base_url = base_url.clone();
+            let tx = tx.clone();
+
+            let handle = tokio::spawn(async move {
+                let client = &client.clone();
+
+                let resp = client.get(page).send().await.unwrap();
+                let text = resp.text().await.unwrap();
+
+                let parser = Html::parse_document(&text);
+
+                let selector_repositories_url = Selector::parse(
+                    r#"main > div > div > div > div > div > div > ul > li > div > div > div > h3 > a"#,
+                ).unwrap();
+
+                parser
+                    .select(&selector_repositories_url)
+                    .map(|l| {
+                        let endpoint_url = l.value().attr("href").unwrap().to_string();
+
+                        let repo_name = endpoint_url.split('/').last().unwrap();
+
+                        let repo_url = format!("{}{}/", base_url, repo_name);
+
+                        println!("repo_url : {}", repo_url);
+
+                        let url = Url::parse(&repo_url).unwrap();
+                        println!("u: {}", url);
+
+                        tx.send(url).unwrap();
+                    })
+                    .for_each(drop);
+            });
+
+            tokio_handles.push(handle);
+        }
+        join_all(tokio_handles).await;
+        drop(tx);
+
+        let urls = rx.iter().collect::<Vec<Url>>();
+
+        // ---- Rayon impl - No Gain
+        urls.into_par_iter()
+            .map(|u| {
+                let repo_config = RepositoryConfig {
+                    url: u,
+                    branchs: Vec::new(),
+                    all_branches,
+                };
+
+                RepositoryFactory::with_config(repo_config).create()
+            })
+            .collect::<Vec<Repository>>()
     }
 
     // TODO: Duplicate with user.rs
@@ -160,11 +230,11 @@ impl OrgFactory {
         join_all(tokio_handles).await;
         drop(tx);
 
-        let urls = rx.try_iter().collect::<Vec<Url>>();
+        let urls = rx.iter().collect::<Vec<Url>>();
 
         let mut thread_handle = Vec::new();
         let (tx, rx) = mpsc::channel();
-        for u in urls.clone() {
+        for u in urls {
             let tx = mpsc::Sender::clone(&tx);
             let handle = thread::spawn(move || {
                 let repo_config = RepositoryConfig {

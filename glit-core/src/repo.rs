@@ -26,7 +26,7 @@ pub struct Repository {
     pub owner: String,
     pub url: Url,
     branches: Vec<String>,
-    clone_paths: Vec<PathBuf>, // A path for each branch
+    clone_paths: Vec<PathBuf>, // A local path (Folder) for each branch
 }
 
 pub struct RepositoryFactory {
@@ -102,15 +102,15 @@ impl RepositoryFactory {
         let owner = path_segments.next().unwrap().to_string();
 
         let name = path_segments.next().unwrap().to_string();
-        print!("Building {} repository... ", name);
-
         let url = self.url;
 
         // default location
         let hash_suffix = Alphanumeric.sample_string(&mut rand::thread_rng(), 8);
         let clone_location =
             PathBuf::from_str(&format!("{}/{}_{}", DEFAULT_PATH, name, hash_suffix)).unwrap();
+
         // Always clone default (main/master branch)
+        println!("Cloning repository : {}", name);
         let repo: git2::Repository = Self::clone(url.clone(), clone_location.clone()).unwrap();
 
         let mut clone_paths: Vec<PathBuf> = Vec::new();
@@ -124,21 +124,14 @@ impl RepositoryFactory {
                     .into_iter()
                     .map(|b| {
                         let branch = b.unwrap().0;
-                        branch
-                            .name()
-                            .unwrap()
-                            .unwrap()
-                            .split("origin/")
-                            .last()
-                            .unwrap()
-                            .to_string()
+                        let branch_name = branch.name().unwrap().unwrap();
+                        branch_name.split("origin/").last().unwrap().to_string()
                     })
                     .collect::<Vec<String>>();
 
                 branches.retain(|value| *value != "HEAD");
 
-                println!("with branches {:?}", branches);
-
+                print!("Building {} repository with branches {:?}", name, branches);
                 let new_paths =
                     Self::clone_multiple_branches(url.clone(), name.clone(), branches.clone());
 
@@ -146,8 +139,7 @@ impl RepositoryFactory {
                 clone_paths.extend(new_paths);
                 remove_dir_all(clone_location).unwrap();
             } else {
-                // Clone only default branch
-                println!("Cloning repository : {}", name);
+                // Default branch is already loned
                 clone_paths.push(clone_location);
                 // ... do not delete master
             }
@@ -263,12 +255,7 @@ impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Reposito
             tx.send((branch, repo_data)).unwrap();
             remove_dir_all(self.clone_paths.first().unwrap()).unwrap();
         } else {
-            for val in self
-                .branches
-                .clone()
-                .into_iter()
-                .zip(self.clone_paths.clone())
-            {
+            for val in self.branches.clone().into_iter().zip(self.clone_paths) {
                 let (br, pt) = val.clone();
                 let tx = mpsc::Sender::clone(&tx);
 
