@@ -34,10 +34,10 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
                 let branch_format = format!("[ Branch : {} ]", branch).yellow();
                 println!("{}", branch_format);
                 for (author, data) in &value.committers {
-                    let mails = data.commit_list.keys().cloned().collect::<Vec<String>>();
-                    print!("{}:", author.trim().blue());
+                    let mails = data.mails.keys().cloned().collect::<Vec<String>>();
+                    print!("{}:", author.to_string().trim().blue());
 
-                    print_mail(mails, author.trim());
+                    print_mail(mails, author.to_string().trim());
 
                     println!();
                 }

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, thread};
 
 use crate::repo::RepositoryCommitData;
 
@@ -8,7 +8,7 @@ pub struct Log {}
 
 impl Log {
     pub fn build(path: PathBuf) -> RepositoryCommitData {
-        let repo = git2::Repository::open(path.as_path()).unwrap();
+        let repo = git2::Repository::open_bare(path.as_path()).unwrap();
         let mut revwalk = repo.revwalk().unwrap();
         revwalk.set_sorting(Sort::TIME).unwrap();
 
@@ -16,7 +16,11 @@ impl Log {
 
         revwalk.push_head().unwrap();
 
-        println!("Build log for {:#?}", path);
+        println!(
+            "Build log for {:#?} with thread ID : {:?}",
+            path,
+            thread::current().id()
+        );
 
         for commit_id in revwalk {
             let commit_id = commit_id.unwrap();

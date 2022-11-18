@@ -168,7 +168,6 @@ impl UserFactory {
             let handle = thread::spawn(move || {
                 let repo_config = RepositoryConfig {
                     url: u,
-                    branchs: Vec::new(),
                     all_branches,
                 };
 

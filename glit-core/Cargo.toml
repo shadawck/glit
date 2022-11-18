@@ -25,3 +25,5 @@ serde = { version = "1.0.147", features = ["derive"] }
 colored = "2.0.0"
 rayon = "1.5.3"
 crossbeam = "0.8.2"
+tokio-uring = "0.4.0"
+dashmap = "5.4.0"

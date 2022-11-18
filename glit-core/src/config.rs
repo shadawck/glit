@@ -9,7 +9,6 @@ pub struct GlobalConfig {
 #[derive(Debug, Clone)]
 pub struct RepositoryConfig {
     pub url: Url,
-    pub branchs: Vec<String>,
     pub all_branches: bool,
 }
 

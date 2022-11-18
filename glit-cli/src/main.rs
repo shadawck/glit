@@ -6,11 +6,9 @@ pub mod repository_command_handler;
 pub mod user_command_handler;
 pub mod utils;
 
-//use ahash::HashMap;
 use ahash::HashMap;
 use std::time::{Duration, Instant};
 
-use exporter::Exporter;
 use glit_core::{
     org::{Org, OrgCommitData, OrgFactory},
     repo::{Repository, RepositoryCommitData, RepositoryFactory},
@@ -18,6 +16,7 @@ use glit_core::{
     CommittedDataExtraction,
 };
 
+use exporter::Exporter;
 use global_option_handler::GlobalOptionHandler;
 use org_command_handler::OrgCommandHandler;
 use printer::Printer;
@@ -33,13 +32,7 @@ async fn main() {
         .version(crate_version!())
         .author("Shadawck <shadawck@protonmail.com>")
         .about("Osint tool - Extract mail from repository/user/organization by crawling commit metadata.")
-        //.arg(
-        //    Arg::new("proxy")
-        //        .short('x')
-        //        .long("proxy")
-        //        .help("Pass through a proxy to minimize the risk to be blocked by github.")
-        //        .num_args(1),
-        //)
+
         .arg(
             Arg::new("verbose")
                 .short('v')
@@ -66,19 +59,10 @@ async fn main() {
                         .help("Github url of a repository"),
                 )
                 .arg(
-                    Arg::new("branch")
-                        .short('b')
-                        .long("branch")
-                        .help("Select a specific branch (default : master | main)")
-                        .conflicts_with("all_branches")
-                        .num_args(1..),
-                )
-                .arg(
                     Arg::new("all_branches")
                         .short('a')
                         .long("all-branches")
                         .help("Get all branch of the repo")
-                        .conflicts_with("branch")
                         .num_args(0),
                 ),
         )
@@ -150,16 +134,21 @@ async fn main() {
             exporter.export_user(&user_extraction)
         }
         Some(("org", sub_match)) => {
-            println!("start");
             let org_config = OrgCommandHandler::config(sub_match);
-            let org: Org = OrgFactory::with_config(org_config).create(&client).await;
-            let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
+            //let org: Org = OrgFactory::with_config(org_config).create(&client).await;
 
-            let printer = Printer::new(global_config.clone());
-            printer.print_org(&org_extraction);
+            let org_extraction = OrgFactory::with_config(org_config, &client)
+                .await
+                .create_producer(&client)
+                .await;
 
-            let exporter = Exporter::new(global_config.clone());
-            exporter.export_org(&org_extraction)
+            //let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
+
+            //let printer = Printer::new(global_config.clone());
+            //printer.print_org(&org_extraction);
+            //
+            //let exporter = Exporter::new(global_config.clone());
+            //exporter.export_org(&org_extraction)
         }
         _ => {}
     }

@@ -1,5 +1,5 @@
 use clap::ArgMatches;
-use glit_core::config::RepositoryConfig;
+use glit_core::{config::RepositoryConfig, types::Branch};
 use reqwest::Url;
 
 use crate::utils::fix_input_url;
@@ -13,14 +13,6 @@ impl RepoCommandHandler {
             .unwrap()
             .as_str();
 
-        let branchs = subcommand_match
-            .get_one::<String>("branch")
-            .unwrap_or(&String::new())
-            .to_owned()
-            .split_terminator(',')
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
-
         let all_branches = subcommand_match
             .get_one::<bool>("all_branches")
             .unwrap()
@@ -32,7 +24,6 @@ impl RepoCommandHandler {
 
         RepositoryConfig {
             url: Url::parse(&repository_url).unwrap(),
-            branchs,
             all_branches,
         }
     }
