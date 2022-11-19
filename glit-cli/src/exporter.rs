@@ -3,7 +3,8 @@ use colored::Colorize;
 use ahash::HashMap;
 
 use glit_core::{
-    config::GlobalConfig, org::OrgCommitData, repo::RepositoryCommitData, user::UserCommitData,
+    config::GlobalConfig, org::OrgCommitData, repo::RepositoryCommitData, types::Branch,
+    user::UserCommitData,
 };
 use serde_json;
 use std::{fs, marker::PhantomData, path::PathBuf, str::FromStr};
@@ -22,8 +23,8 @@ impl<T> Exporter<T> {
     }
 }
 
-impl Exporter<HashMap<String, RepositoryCommitData>> {
-    pub fn export_repo(self, data: &HashMap<String, RepositoryCommitData>) {
+impl Exporter<HashMap<Branch, RepositoryCommitData>> {
+    pub fn export_repo(self, data: &HashMap<Branch, RepositoryCommitData>) {
         let output = self.global_config.output;
 
         if !output.is_empty() {
@@ -41,8 +42,8 @@ impl Exporter<HashMap<String, RepositoryCommitData>> {
     }
 }
 
-impl Exporter<HashMap<String, UserCommitData>> {
-    pub fn export_user(self, data: &HashMap<String, UserCommitData>) {
+impl Exporter<HashMap<Branch, UserCommitData>> {
+    pub fn export_user(self, data: &HashMap<Branch, UserCommitData>) {
         let output = self.global_config.output;
 
         if !output.is_empty() {
@@ -60,8 +61,8 @@ impl Exporter<HashMap<String, UserCommitData>> {
     }
 }
 
-impl Exporter<HashMap<String, OrgCommitData>> {
-    pub fn export_org(self, data: &HashMap<String, OrgCommitData>) {
+impl Exporter<HashMap<Branch, OrgCommitData>> {
+    pub fn export_org(self, data: &HashMap<Branch, OrgCommitData>) {
         let output = self.global_config.output;
 
         if !output.is_empty() {

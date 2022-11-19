@@ -19,6 +19,7 @@ const NUMBER_OF_REPO_PER_PAGE: u32 = 30;
 use crate::{
     config::{OrgConfig, RepositoryConfig},
     repo::{Repository, RepositoryCommitData, RepositoryFactory},
+    types::Branch,
 };
 use crate::{log::Log, CommittedDataExtraction};
 pub struct Org {
@@ -217,11 +218,9 @@ impl OrgFactory {
                     drop(rx);
                     let data = repo.clone().committed_data();
 
-                    let org = OrgCommitData { branches: data };
-
                     //let log = Log::build(clone_location.clone());
 
-                    dash.insert(repo.name, org);
+                    //dash.insert(repo.name, org);
                     //remove_dir_all(clone_location).unwrap();
                 })
             }
@@ -341,7 +340,7 @@ impl OrgFactory {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrgCommitData {
-    pub branches: HashMap<String, RepositoryCommitData>,
+    pub branches: HashMap<Branch, RepositoryCommitData>,
 }
 
 //type RepoName = String;

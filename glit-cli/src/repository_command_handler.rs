@@ -1,5 +1,5 @@
 use clap::ArgMatches;
-use glit_core::{config::RepositoryConfig, types::Branch};
+use glit_core::config::RepositoryConfig;
 use reqwest::Url;
 
 use crate::utils::fix_input_url;

@@ -1,12 +1,26 @@
-use std::{collections::BTreeMap, fs::remove_dir_all, path::PathBuf, str::FromStr};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    fs::remove_dir_all,
+    io::{self, Write},
+    path::PathBuf,
+    str::FromStr,
+};
 
 use crate::{config::RepositoryConfig, log::Log, types::Branch, CommittedDataExtraction};
 use ahash::HashMap;
-use git2::{build::RepoBuilder, BranchType, Oid, RemoteConnection};
+use git2::{
+    build::{CheckoutBuilder, RepoBuilder},
+    BranchType, Oid, RemoteConnection,
+};
 use rand::distributions::{Alphanumeric, DistString};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
+
+use git2::{FetchOptions, Progress, RemoteCallbacks};
 
 const DEFAULT_PATH: &str = "/tmp";
 
@@ -17,6 +31,14 @@ pub struct Repository {
     pub url: Url,
     branches: Vec<Branch>,
     clone_paths: Vec<PathBuf>, // A local path (Folder) for each branch
+}
+
+struct State {
+    progress: Option<Progress<'static>>,
+    total: usize,
+    current: usize,
+    path: Option<PathBuf>,
+    newline: bool,
 }
 
 pub struct RepositoryFactory {
@@ -38,9 +60,41 @@ impl RepositoryFactory {
     }
 
     fn clone(url: &Url, path: PathBuf) -> Result<git2::Repository, git2::Error> {
-        RepoBuilder::new()
+        let state = RefCell::new(State {
+            progress: None,
+            total: 0,
+            current: 0,
+            path: None,
+            newline: false,
+        });
+
+        let mut cb = RemoteCallbacks::new();
+        cb.transfer_progress(|stats| {
+            let mut state = state.borrow_mut();
+
+            state.progress = Some(stats.to_owned());
+            print(&mut *state);
+            true
+        });
+
+        let mut co = CheckoutBuilder::new();
+        co.progress(|path, cur, total| {
+            let mut state = state.borrow_mut();
+            state.path = path.map(|p| p.to_path_buf());
+            state.current = cur;
+            state.total = total;
+            print(&mut *state);
+        });
+
+        let mut fo = FetchOptions::new();
+        fo.remote_callbacks(cb);
+
+        let repo = RepoBuilder::new()
             .bare(true)
-            .clone(url.as_str(), path.as_path())
+            .fetch_options(fo)
+            .with_checkout(co)
+            .clone(url.as_str(), path.as_path());
+        repo
     }
 
     fn clone_branches(url: Url, repo_name: String, branches: Vec<Branch>) -> Vec<PathBuf> {
@@ -62,8 +116,38 @@ impl RepositoryFactory {
                 let branch_clone_path = PathBuf::from_str(&path).unwrap();
 
                 println!("Cloning branch : {:?} at {}", branch, path);
+                let state = RefCell::new(State {
+                    progress: None,
+                    total: 0,
+                    current: 0,
+                    path: None,
+                    newline: false,
+                });
+
+                let mut cb = RemoteCallbacks::new();
+                cb.transfer_progress(|stats| {
+                    let mut state = state.borrow_mut();
+
+                    state.progress = Some(stats.to_owned());
+                    print(&mut *state);
+                    true
+                });
+
+                let mut co = CheckoutBuilder::new();
+                co.progress(|path, cur, total| {
+                    let mut state = state.borrow_mut();
+                    state.path = path.map(|p| p.to_path_buf());
+                    state.current = cur;
+                    state.total = total;
+                    print(&mut *state);
+                });
+
+                let mut fo = FetchOptions::new();
+                fo.remote_callbacks(cb);
                 RepoBuilder::new()
                     .bare(true)
+                    .fetch_options(fo)
+                    .with_checkout(co)
                     .branch(&branch.to_string())
                     .clone(url.clone().as_str(), &branch_clone_path)
                     .unwrap();
@@ -236,8 +320,8 @@ impl RepositoryCommitData {
     }
 }
 
-impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Repository {
-    fn committed_data(self) -> HashMap<String, RepositoryCommitData> {
+impl CommittedDataExtraction<HashMap<Branch, RepositoryCommitData>> for Repository {
+    fn committed_data(self) -> HashMap<Branch, RepositoryCommitData> {
         self.branches
             .clone()
             .into_iter()
@@ -246,8 +330,52 @@ impl CommittedDataExtraction<HashMap<String, RepositoryCommitData>> for Reposito
                 let repo_data = Log::build(pt.clone());
                 remove_dir_all(pt.parent().unwrap()).unwrap();
 
-                (br.to_string(), repo_data)
+                (br, repo_data)
             })
             .collect::<HashMap<_, _>>()
     }
+}
+
+fn print(state: &mut State) {
+    let stats = state.progress.as_ref().unwrap();
+    let network_pct = (100 * stats.received_objects()) / stats.total_objects();
+    let index_pct = (100 * stats.indexed_objects()) / stats.total_objects();
+    let co_pct = if state.total > 0 {
+        (100 * state.current) / state.total
+    } else {
+        0
+    };
+    let kbytes = stats.received_bytes() / 1024;
+    if stats.received_objects() == stats.total_objects() {
+        if !state.newline {
+            println!();
+            state.newline = true;
+        }
+        print!(
+            "Resolving deltas {}/{}\r",
+            stats.indexed_deltas(),
+            stats.total_deltas()
+        );
+    } else {
+        print!(
+            "net {:3}% ({:4} kb, {:5}/{:5})  /  idx {:3}% ({:5}/{:5})  \
+             /  chk {:3}% ({:4}/{:4}) {}\r",
+            network_pct,
+            kbytes,
+            stats.received_objects(),
+            stats.total_objects(),
+            index_pct,
+            stats.indexed_objects(),
+            stats.total_objects(),
+            co_pct,
+            state.current,
+            state.total,
+            state
+                .path
+                .as_ref()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        )
+    }
+    io::stdout().flush().unwrap();
 }

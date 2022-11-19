@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     config::{RepositoryConfig, UserConfig},
     repo::{Repository, RepositoryCommitData, RepositoryFactory},
+    types::Branch,
     CommittedDataExtraction,
 };
 
@@ -188,14 +189,13 @@ impl UserFactory {
     }
 }
 
-type RepoName = String;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserCommitData {
-    pub repositories_data: HashMap<RepoName, RepositoryCommitData>,
+    pub repositories_data: HashMap<Branch, RepositoryCommitData>,
 }
 
-impl CommittedDataExtraction<HashMap<RepoName, UserCommitData>> for User {
-    fn committed_data(self) -> HashMap<RepoName, UserCommitData> {
+impl CommittedDataExtraction<HashMap<Branch, UserCommitData>> for User {
+    fn committed_data(self) -> HashMap<Branch, UserCommitData> {
         let mut handles = vec![];
         let (tx, rx) = mpsc::channel();
 
@@ -204,11 +204,11 @@ impl CommittedDataExtraction<HashMap<RepoName, UserCommitData>> for User {
 
             let handle = thread::spawn(move || {
                 let commited = repository.clone().committed_data();
-                let user_commit_data = UserCommitData {
-                    repositories_data: commited,
-                };
+                //let user_commit_data = UserCommitData {
+                //    repositories_data: commited,
+                //};
 
-                tx.send((repository.name, user_commit_data)).unwrap();
+                //tx.send((repository.name, user_commit_data)).unwrap();
             });
 
             handles.push(handle);
@@ -219,6 +219,6 @@ impl CommittedDataExtraction<HashMap<RepoName, UserCommitData>> for User {
             .for_each(drop);
         drop(tx);
 
-        rx.into_iter().collect::<HashMap<String, UserCommitData>>()
+        rx.into_iter().collect::<HashMap<Branch, UserCommitData>>()
     }
 }

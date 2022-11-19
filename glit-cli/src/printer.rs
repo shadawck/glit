@@ -4,7 +4,8 @@ use std::marker::PhantomData;
 
 use colored::Colorize;
 use glit_core::{
-    config::GlobalConfig, org::OrgCommitData, repo::RepositoryCommitData, user::UserCommitData,
+    config::GlobalConfig, org::OrgCommitData, repo::RepositoryCommitData, types::Branch,
+    user::UserCommitData,
 };
 
 pub struct Printer<T> {
@@ -25,13 +26,13 @@ impl<T> Printer<T> {
 }
 
 impl Printer<HashMap<String, RepositoryCommitData>> {
-    pub fn print_repo(&self, data: &HashMap<AuthorName, RepositoryCommitData>) {
+    pub fn print_repo(&self, data: &HashMap<Branch, RepositoryCommitData>) {
         //println!("Check mail for {}", self.repo_name);
 
         if self.global_config.verbose {
         } else {
             for (branch, value) in data {
-                let branch_format = format!("[ Branch : {} ]", branch).yellow();
+                let branch_format = format!("[ Branch : {} ]", branch.to_string()).yellow();
                 println!("{}", branch_format);
                 for (author, data) in &value.committers {
                     let mails = data.mails.keys().cloned().collect::<Vec<String>>();
@@ -48,20 +49,20 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
 }
 
 impl Printer<UserCommitData> {
-    pub fn print_user(&self, data: &HashMap<RepoName, UserCommitData>) {
+    pub fn print_user(&self, data: &HashMap<Branch, UserCommitData>) {
         let printer = Printer::new(self.global_config.clone());
         for (repo_name, value) in data {
-            let repo_format = format!("[ Repository : {} ]", repo_name).magenta();
+            let repo_format = format!("[ Repository : {} ]", repo_name.to_string()).magenta();
             println!("{}", repo_format);
             printer.print_repo(&value.repositories_data);
         }
     }
 }
 impl Printer<OrgCommitData> {
-    pub fn print_org(&self, data: &HashMap<RepoName, OrgCommitData>) {
+    pub fn print_org(&self, data: &HashMap<Branch, OrgCommitData>) {
         let printer = Printer::new(self.global_config.clone());
         for (repo_name, value) in data {
-            let repo_format = format!("[ Repository : {} ]", repo_name).magenta();
+            let repo_format = format!("[ Repository : {} ]", repo_name.to_string()).magenta();
             println!("{}", repo_format);
             printer.print_repo(&value.branches);
         }

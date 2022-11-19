@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use glit_core::{
     org::{Org, OrgCommitData, OrgFactory},
     repo::{Repository, RepositoryCommitData, RepositoryFactory},
+    types::Branch,
     user::{User, UserCommitData, UserFactory},
     CommittedDataExtraction,
 };
@@ -113,7 +114,7 @@ async fn main() {
             let repository_config = RepoCommandHandler::config(sub_match);
             let repository: Repository = RepositoryFactory::with_config(repository_config).create();
 
-            let repo_extraction: HashMap<String, RepositoryCommitData> =
+            let repo_extraction: HashMap<Branch, RepositoryCommitData> =
                 repository.committed_data();
 
             let printer = Printer::new(global_config.clone());
@@ -125,7 +126,7 @@ async fn main() {
         Some(("user", sub_match)) => {
             let user_config = UserCommandHandler::config(sub_match);
             let user: User = UserFactory::with_config(user_config).create(&client).await;
-            let user_extraction: HashMap<String, UserCommitData> = user.committed_data();
+            let user_extraction: HashMap<Branch, UserCommitData> = user.committed_data();
 
             let printer = Printer::new(global_config.clone());
             printer.print_user(&user_extraction);
@@ -142,8 +143,7 @@ async fn main() {
                 .create_producer(&client)
                 .await;
 
-            //let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
-
+            // let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
             //let printer = Printer::new(global_config.clone());
             //printer.print_org(&org_extraction);
             //
