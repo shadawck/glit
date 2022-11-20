@@ -10,11 +10,10 @@ use ahash::HashMap;
 use std::time::{Duration, Instant};
 
 use glit_core::{
-    org::{Org, OrgCommitData, OrgFactory},
-    repo::{Repository, RepositoryCommitData, RepositoryFactory},
+    org::{Logger, Org, OrgFactory},
+    repo::{Committers, Repository, RepositoryFactory},
     types::Branch,
-    user::{User, UserCommitData, UserFactory},
-    CommittedDataExtraction,
+    user::{User, UserFactory},
 };
 
 use exporter::Exporter;
@@ -114,8 +113,7 @@ async fn main() {
             let repository_config = RepoCommandHandler::config(sub_match);
             let repository: Repository = RepositoryFactory::with_config(repository_config).create();
 
-            let repo_extraction: HashMap<Branch, RepositoryCommitData> =
-                repository.committed_data();
+            let repo_extraction = repository.extract_log();
 
             let printer = Printer::new(global_config.clone());
             printer.print_repo(&repo_extraction);
@@ -125,30 +123,34 @@ async fn main() {
         }
         Some(("user", sub_match)) => {
             let user_config = UserCommandHandler::config(sub_match);
-            let user: User = UserFactory::with_config(user_config).create(&client).await;
-            let user_extraction: HashMap<Branch, UserCommitData> = user.committed_data();
+            let user: User = UserFactory::with_config(user_config)
+                .build_with_client(&client)
+                .await;
 
+            let user_with_log = Logger::log_for(user, &client).await;
+
+            //let user_extraction: HashMap<Branch, UserCommitData> = user.committed_data();
+            //
             let printer = Printer::new(global_config.clone());
-            printer.print_user(&user_extraction);
-
+            printer.print_user(&user_with_log);
+            //
             let exporter = Exporter::new(global_config.clone());
-            exporter.export_user(&user_extraction)
+            exporter.export_user(&user_with_log)
         }
         Some(("org", sub_match)) => {
             let org_config = OrgCommandHandler::config(sub_match);
-            //let org: Org = OrgFactory::with_config(org_config).create(&client).await;
-
-            let org_extraction = OrgFactory::with_config(org_config, &client)
-                .await
-                .create_producer(&client)
+            let org: Org = OrgFactory::with_config(org_config)
+                .build_with_client(&client)
                 .await;
 
+            let org_with_log = Logger::log_for(org, &client).await;
+
             // let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
-            //let printer = Printer::new(global_config.clone());
-            //printer.print_org(&org_extraction);
-            //
-            //let exporter = Exporter::new(global_config.clone());
-            //exporter.export_org(&org_extraction)
+            let printer = Printer::new(global_config.clone());
+            printer.print_org(&org_with_log);
+
+            let exporter = Exporter::new(global_config.clone());
+            exporter.export_org(&org_with_log)
         }
         _ => {}
     }

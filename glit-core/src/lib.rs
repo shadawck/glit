@@ -5,6 +5,6 @@ pub mod org;
 pub mod repo;
 pub mod types;
 pub mod user;
-pub trait CommittedDataExtraction<T> {
-    fn committed_data(self) -> T;
+pub trait ExtractLevel<T> {
+    fn extract_log(self) -> T;
 }

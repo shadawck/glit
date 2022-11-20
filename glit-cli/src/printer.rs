@@ -1,20 +1,11 @@
-use ahash::HashMap;
-//use std::collections::HashMap;
-use std::marker::PhantomData;
-
 use colored::Colorize;
-use glit_core::{
-    config::GlobalConfig, org::OrgCommitData, repo::RepositoryCommitData, types::Branch,
-    user::UserCommitData,
-};
+use glit_core::{config::GlobalConfig, org::Org, repo::Repository, user::User};
+use std::marker::PhantomData;
 
 pub struct Printer<T> {
     global_config: GlobalConfig,
     data: PhantomData<T>,
 }
-
-type AuthorName = String;
-type RepoName = String;
 
 impl<T> Printer<T> {
     pub fn new(global_config: GlobalConfig) -> Self {
@@ -25,13 +16,13 @@ impl<T> Printer<T> {
     }
 }
 
-impl Printer<HashMap<String, RepositoryCommitData>> {
-    pub fn print_repo(&self, data: &HashMap<Branch, RepositoryCommitData>) {
+impl Printer<Repository> {
+    pub fn print_repo(&self, data: &Repository) {
         //println!("Check mail for {}", self.repo_name);
 
         if self.global_config.verbose {
         } else {
-            for (branch, value) in data {
+            for (branch, value) in &data.branch_data {
                 let branch_format = format!("[ Branch : {} ]", branch.to_string()).yellow();
                 println!("{}", branch_format);
                 for (author, data) in &value.committers {
@@ -48,23 +39,23 @@ impl Printer<HashMap<String, RepositoryCommitData>> {
     }
 }
 
-impl Printer<UserCommitData> {
-    pub fn print_user(&self, data: &HashMap<Branch, UserCommitData>) {
+impl Printer<User> {
+    pub fn print_user(&self, data: &User) {
         let printer = Printer::new(self.global_config.clone());
-        for (repo_name, value) in data {
+        for (repo_name, value) in data.repositories_data.clone() {
             let repo_format = format!("[ Repository : {} ]", repo_name.to_string()).magenta();
             println!("{}", repo_format);
-            printer.print_repo(&value.repositories_data);
+            printer.print_repo(&value);
         }
     }
 }
-impl Printer<OrgCommitData> {
-    pub fn print_org(&self, data: &HashMap<Branch, OrgCommitData>) {
+impl Printer<Org> {
+    pub fn print_org(&self, data: &Org) {
         let printer = Printer::new(self.global_config.clone());
-        for (repo_name, value) in data {
+        for (repo_name, value) in data.repositories_data.clone() {
             let repo_format = format!("[ Repository : {} ]", repo_name.to_string()).magenta();
             println!("{}", repo_format);
-            printer.print_repo(&value.branches);
+            printer.print_repo(&value);
         }
     }
 }

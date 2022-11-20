@@ -1,3 +1,17 @@
+use crate::{
+    config::RepositoryConfig,
+    log::Log,
+    types::{AuthorName, BranchName},
+};
+use ahash::{HashMap, HashMapExt};
+use git2::{
+    build::{CheckoutBuilder, RepoBuilder},
+    BranchType, Oid,
+};
+use rand::distributions::{Alphanumeric, DistString};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use reqwest::Url;
+use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -7,30 +21,18 @@ use std::{
     str::FromStr,
 };
 
-use crate::{config::RepositoryConfig, log::Log, types::Branch, CommittedDataExtraction};
-use ahash::HashMap;
-use git2::{
-    build::{CheckoutBuilder, RepoBuilder},
-    BranchType, Oid, RemoteConnection,
-};
-use rand::distributions::{Alphanumeric, DistString};
-use rayon::prelude::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-};
-use reqwest::Url;
-use serde::{Deserialize, Serialize};
-
 use git2::{FetchOptions, Progress, RemoteCallbacks};
 
 const DEFAULT_PATH: &str = "/tmp";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Repository {
     pub name: String,
     pub owner: String,
-    pub url: Url,
-    branches: Vec<Branch>,
-    clone_paths: Vec<PathBuf>, // A local path (Folder) for each branch
+    branches: Vec<BranchName>,
+    #[serde(skip)]
+    clone_paths: Vec<PathBuf>,
+    pub branch_data: HashMap<BranchName, Committers>,
 }
 
 struct State {
@@ -43,7 +45,7 @@ struct State {
 
 pub struct RepositoryFactory {
     all_branches: bool,
-    branches: Vec<Branch>,
+    branches: Vec<BranchName>,
     url: Url,
 }
 
@@ -55,11 +57,42 @@ impl RepositoryFactory {
         RepositoryFactory {
             all_branches,
             url,
-            branches: Vec::<Branch>::new(),
+            branches: Vec::<BranchName>::new(),
         }
     }
 
-    fn clone(url: &Url, path: PathBuf) -> Result<git2::Repository, git2::Error> {
+    fn get_head_branch(repo: &git2::Repository) -> String {
+        let head = repo.head().unwrap();
+        head.name().unwrap().split('/').last().unwrap().to_string()
+    }
+
+    pub fn fetch_branches(repository: &git2::Repository, head: &str) -> Vec<BranchName> {
+        let mut branches = repository
+            .branches(Some(BranchType::Remote))
+            .unwrap()
+            .into_iter()
+            .map(|b| {
+                let branch = b.unwrap().0;
+                let branch_name = branch.name().unwrap().unwrap();
+                let string_branch = branch_name.split("origin/").last().unwrap().to_string();
+                BranchName(string_branch)
+            })
+            .collect::<Vec<_>>();
+
+        branches.retain(|value| *value != BranchName("HEAD".to_string()));
+        branches.retain(|value| *value != BranchName(head.to_string())); // Do not clone default branch two time
+
+        branches
+    }
+
+    pub fn prepare_branch(branches: Vec<BranchName>) -> Vec<BranchName> {
+        branches
+            .iter()
+            .map(|branch| BranchName(branch.to_string().replace('/', "_")))
+            .collect::<Vec<_>>()
+    }
+
+    fn clone(url: &Url, path: &PathBuf) -> Result<git2::Repository, git2::Error> {
         let state = RefCell::new(State {
             progress: None,
             total: 0,
@@ -97,9 +130,8 @@ impl RepositoryFactory {
         repo
     }
 
-    fn clone_branches(url: Url, repo_name: String, branches: Vec<Branch>) -> Vec<PathBuf> {
+    fn clone_branches(url: Url, repo_name: String, branches: Vec<BranchName>) -> Vec<PathBuf> {
         let repo_name = repo_name.replace('-', "_");
-
         branches
             .par_iter()
             .map(|branch| {
@@ -157,36 +189,6 @@ impl RepositoryFactory {
             .collect::<Vec<PathBuf>>()
     }
 
-    pub fn fetch_branches(repository: &git2::Repository) -> Vec<Branch> {
-        let mut branches = repository
-            .branches(Some(BranchType::Remote))
-            .unwrap()
-            .into_iter()
-            .map(|b| {
-                let branch = b.unwrap().0;
-                let branch_name = branch.name().unwrap().unwrap();
-                let string_branch = branch_name.split("origin/").last().unwrap().to_string();
-                Branch(string_branch)
-            })
-            .collect::<Vec<Branch>>();
-
-        let head = repository.head().unwrap();
-        let head = head.name().unwrap();
-        println!("Head Branch {}", head);
-
-        branches.retain(|value| *value != Branch("HEAD".to_string()));
-        branches.retain(|value| *value != Branch(head.to_string())); // Do not clone default branch two time
-
-        branches
-    }
-
-    pub fn prepare_branch(branches: Vec<Branch>) -> Vec<Branch> {
-        branches
-            .iter()
-            .map(|branch| Branch(branch.to_string().replace('/', "_")))
-            .collect::<Vec<Branch>>()
-    }
-
     pub fn create(mut self) -> Repository {
         let mut path_segments = self.url.path_segments().unwrap();
         let owner = path_segments.next().unwrap().to_string();
@@ -200,16 +202,19 @@ impl RepositoryFactory {
             "{}/{}/{}",
             DEFAULT_PATH,
             hashed_repo_name,
-            "main".to_string()
+            "default".to_string()
         ))
         .unwrap();
+        println!("Default location : {:?}", clone_location.clone());
 
         let mut clone_paths: Vec<PathBuf> = Vec::new();
-        let repo: git2::Repository = Self::clone(&self.url, clone_location.clone()).unwrap();
+        let repo: git2::Repository = Self::clone(&self.url, &clone_location).unwrap();
+        let head = Self::get_head_branch(&repo);
+        clone_paths.push(clone_location.clone());
 
         // Clone all branches
         if self.all_branches {
-            let branches = Self::fetch_branches(&repo);
+            let mut branches = Self::fetch_branches(&repo, &head);
             let prepared_branch = Self::prepare_branch(branches.clone());
 
             println!(
@@ -219,28 +224,51 @@ impl RepositoryFactory {
 
             let paths = Self::clone_branches(self.url.clone(), repo_name.clone(), branches.clone());
 
-            self.branches = branches;
+            branches.push(BranchName(head));
+            self.branches = branches.clone();
+            println!("Branches : {:#?}", branches);
+
             clone_paths.extend(paths);
         }
         // Clone only default branch
         else {
-            clone_paths.push(clone_location);
-            self.branches = vec![Branch("main".to_string())];
+            self.branches = vec![BranchName(head)];
+            // move alraedy clone in the right place
         }
 
         Repository {
             name: repo_name,
             owner,
-            url: self.url.clone(),
             branches: self.branches.clone(),
             clone_paths,
+            branch_data: HashMap::new(),
         }
     }
 }
 
-type Mail = String; // A mail appear in a list of commit identified by a hash
+impl Repository {
+    pub fn extract_log(mut self) -> Repository {
+        self.branch_data = self
+            .branches
+            .clone()
+            .into_iter()
+            .zip(self.clone_paths.clone())
+            .map(|(br, pt)| {
+                let repo_data = Log::build(pt.clone());
+                remove_dir_all(pt.parent().unwrap()).unwrap();
 
-// A Person commiting with his name and all the commit he pushed
+                println!("Removing {:?}", pt.parent().unwrap());
+
+                (br, repo_data)
+            })
+            .collect::<HashMap<_, _>>();
+
+        self
+    }
+}
+
+type Mail = String; // A mail appear in a list of commit identified by a hash
+                    // A Person commiting with his name and all the commit he pushed
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Committer {
     pub mails: BTreeMap<Mail, Vec<String>>,
@@ -257,28 +285,18 @@ impl Committer {
     }
 }
 
-//type AuthorName = String;
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct AuthorName(pub String);
-
-impl ToString for AuthorName {
-    fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct RepositoryCommitData {
+pub struct Committers {
     pub committers: BTreeMap<AuthorName, Committer>,
 }
 
-impl Default for RepositoryCommitData {
+impl Default for Committers {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RepositoryCommitData {
+impl Committers {
     pub fn new() -> Self {
         Self {
             committers: BTreeMap::<AuthorName, Committer>::new(),
@@ -317,22 +335,6 @@ impl RepositoryCommitData {
         }
 
         self.to_owned()
-    }
-}
-
-impl CommittedDataExtraction<HashMap<Branch, RepositoryCommitData>> for Repository {
-    fn committed_data(self) -> HashMap<Branch, RepositoryCommitData> {
-        self.branches
-            .clone()
-            .into_iter()
-            .zip(self.clone_paths)
-            .map(|(br, pt)| {
-                let repo_data = Log::build(pt.clone());
-                remove_dir_all(pt.parent().unwrap()).unwrap();
-
-                (br, repo_data)
-            })
-            .collect::<HashMap<_, _>>()
     }
 }
 
