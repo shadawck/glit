@@ -1,14 +1,5 @@
 use colored::Colorize;
-
-use ahash::HashMap;
-
-use glit_core::{
-    config::GlobalConfig,
-    org::Org,
-    repo::{Committers, Repository},
-    types::{Branch, RepoName},
-    user::User,
-};
+use glit_core::{config::GlobalConfig, org::Org, repo::Repository, user::User};
 use serde_json;
 use std::{fs, marker::PhantomData, path::PathBuf, str::FromStr};
 

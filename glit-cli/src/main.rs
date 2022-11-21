@@ -5,26 +5,22 @@ pub mod printer;
 pub mod repository_command_handler;
 pub mod user_command_handler;
 pub mod utils;
-
-use ahash::HashMap;
-use std::time::{Duration, Instant};
-
-use glit_core::{
-    org::{Logger, Org, OrgFactory},
-    repo::{Committers, Repository, RepositoryFactory},
-    types::Branch,
-    user::{User, UserFactory},
-};
-
+use clap::{crate_version, Arg, Command};
 use exporter::Exporter;
+use glit_core::{
+    org::{Org, OrgFactory},
+    repo::{Repository, RepositoryFactory},
+    user::{User, UserFactory},
+    Logger,
+};
 use global_option_handler::GlobalOptionHandler;
 use org_command_handler::OrgCommandHandler;
 use printer::Printer;
 use repository_command_handler::RepoCommandHandler;
 use reqwest::ClientBuilder;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 use user_command_handler::UserCommandHandler;
-
-use clap::{crate_version, Arg, Command};
 
 #[tokio::main]
 async fn main() {
@@ -104,9 +100,14 @@ async fn main() {
         )
         .get_matches();
 
-    // Use governor to limit client query
     let client = ClientBuilder::new().build().unwrap();
     let global_config = GlobalOptionHandler::config(&matches);
+
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
 
     match matches.subcommand() {
         Some(("repo", sub_match)) => {
@@ -129,11 +130,9 @@ async fn main() {
 
             let user_with_log = Logger::log_for(user, &client).await;
 
-            //let user_extraction: HashMap<Branch, UserCommitData> = user.committed_data();
-            //
             let printer = Printer::new(global_config.clone());
             printer.print_user(&user_with_log);
-            //
+
             let exporter = Exporter::new(global_config.clone());
             exporter.export_user(&user_with_log)
         }
@@ -145,7 +144,6 @@ async fn main() {
 
             let org_with_log = Logger::log_for(org, &client).await;
 
-            // let org_extraction: HashMap<String, OrgCommitData> = org.committed_data();
             let printer = Printer::new(global_config.clone());
             printer.print_org(&org_with_log);
 

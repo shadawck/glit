@@ -1,24 +1,11 @@
-use std::{sync::mpsc, thread};
-
-//use std::collections::HashMap;
-use ahash::{HashMap, RandomState};
-
-use colored::Colorize;
+use ahash::RandomState;
+use async_trait::async_trait;
 use dashmap::DashMap;
-use futures::future::join_all;
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use crate::{
-    config::{RepositoryConfig, UserConfig},
-    repo::{Committers, Repository, RepositoryFactory},
-    types::RepoName,
-};
-
-use crate::org::Factory;
-
-const NUMBER_OF_REPO_PER_PAGE: u32 = 30;
+use crate::{config::UserConfig, repo::Repository, types::RepoName, ExtractLog, Factory};
 
 #[derive(Serialize)]
 pub struct User {
@@ -77,5 +64,56 @@ impl UserFactory {
                 RandomState::new(),
             ),
         }
+    }
+}
+
+#[async_trait]
+impl Factory for UserFactory {
+    async fn _repositories_count(client: &Client, url: Url) -> u32 {
+        let resp = client.get(url).send().await.unwrap();
+        let text = resp.text().await.unwrap();
+
+        let parser = Html::parse_document(&text);
+        let selector_repositories_count =
+            Selector::parse(r#"turbo-frame > div > div > div > div > strong"#).unwrap();
+
+        let repository_count_str = parser
+            .select(&selector_repositories_count)
+            .next()
+            .unwrap()
+            .inner_html();
+
+        repository_count_str
+            .trim()
+            .replace(',', "")
+            .parse::<u32>()
+            .unwrap()
+    }
+}
+
+#[async_trait]
+impl ExtractLog for User {
+    async fn extract_log(mut self, client: &Client) -> Self {
+        let user_selector =
+            Selector::parse(r#"turbo-frame > div > div > ul > li > div > div > h3 > a"#).unwrap();
+
+        self.repositories_data = Self::common_log_feature(&self, client, user_selector).await;
+        self
+    }
+
+    fn get_repo_count(&self) -> u32 {
+        self.repo_count
+    }
+
+    fn get_all_branches(&self) -> bool {
+        self.all_branches
+    }
+
+    fn get_url(&self) -> Url {
+        self.url.clone()
+    }
+
+    fn get_pages_url(&self) -> Vec<Url> {
+        self.pages_urls.clone()
     }
 }

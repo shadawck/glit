@@ -17,9 +17,10 @@ use std::{
     collections::BTreeMap,
     fs::remove_dir_all,
     io::{self, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
 };
+use tracing::{error, info};
 
 use git2::{FetchOptions, Progress, RemoteCallbacks};
 
@@ -92,7 +93,7 @@ impl RepositoryFactory {
             .collect::<Vec<_>>()
     }
 
-    fn clone(url: &Url, path: &PathBuf) -> Result<git2::Repository, git2::Error> {
+    fn clone(url: &Url, path: &Path) -> Result<git2::Repository, git2::Error> {
         let state = RefCell::new(State {
             progress: None,
             total: 0,
@@ -126,7 +127,7 @@ impl RepositoryFactory {
             .bare(true)
             .fetch_options(fo)
             .with_checkout(co)
-            .clone(url.as_str(), path.as_path());
+            .clone(url.as_str(), path);
         repo
     }
 
@@ -146,8 +147,6 @@ impl RepositoryFactory {
                 );
 
                 let branch_clone_path = PathBuf::from_str(&path).unwrap();
-
-                println!("Cloning branch : {:?} at {}", branch, path);
                 let state = RefCell::new(State {
                     progress: None,
                     total: 0,
@@ -176,13 +175,21 @@ impl RepositoryFactory {
 
                 let mut fo = FetchOptions::new();
                 fo.remote_callbacks(cb);
-                RepoBuilder::new()
+
+                let repo = RepoBuilder::new()
                     .bare(true)
                     .fetch_options(fo)
                     .with_checkout(co)
                     .branch(&branch.to_string())
-                    .clone(url.clone().as_str(), &branch_clone_path)
-                    .unwrap();
+                    .clone(url.clone().as_str(), &branch_clone_path);
+
+                match repo {
+                    Ok(_) => info!(
+                        "[{:?}] Cloning branch : {:?} at {}",
+                        repo_name, branch, path
+                    ),
+                    Err(_) => info!("Failed to clone {} with branch {:?}", repo_name, branch),
+                }
 
                 branch_clone_path
             })
@@ -197,43 +204,32 @@ impl RepositoryFactory {
         // default location
         let hash_suffix = Alphanumeric.sample_string(&mut rand::thread_rng(), 6);
         let hashed_repo_name = format!("{}_{}", repo_name, hash_suffix);
-
         let clone_location = PathBuf::from_str(&format!(
             "{}/{}/{}",
-            DEFAULT_PATH,
-            hashed_repo_name,
-            "default".to_string()
+            DEFAULT_PATH, hashed_repo_name, "default"
         ))
         .unwrap();
-        println!("Default location : {:?}", clone_location.clone());
 
         let mut clone_paths: Vec<PathBuf> = Vec::new();
-        let repo: git2::Repository = Self::clone(&self.url, &clone_location).unwrap();
+        let repo: git2::Repository = Self::clone(&self.url, clone_location.as_path()).unwrap();
         let head = Self::get_head_branch(&repo);
-        clone_paths.push(clone_location.clone());
+        clone_paths.push(clone_location);
 
         // Clone all branches
         if self.all_branches {
             let mut branches = Self::fetch_branches(&repo, &head);
-            let prepared_branch = Self::prepare_branch(branches.clone());
-
-            println!(
-                "Building {} repository with branches {:?}",
-                repo_name, prepared_branch
-            );
+            //let prepared_branch = Self::prepare_branch(branches.clone());
 
             let paths = Self::clone_branches(self.url.clone(), repo_name.clone(), branches.clone());
 
             branches.push(BranchName(head));
             self.branches = branches.clone();
-            println!("Branches : {:#?}", branches);
 
             clone_paths.extend(paths);
         }
         // Clone only default branch
         else {
             self.branches = vec![BranchName(head)];
-            // move alraedy clone in the right place
         }
 
         Repository {
@@ -255,9 +251,13 @@ impl Repository {
             .zip(self.clone_paths.clone())
             .map(|(br, pt)| {
                 let repo_data = Log::build(pt.clone());
-                remove_dir_all(pt.parent().unwrap()).unwrap();
 
-                println!("Removing {:?}", pt.parent().unwrap());
+                let remove_path = pt.parent().unwrap();
+                let removal = remove_dir_all(&remove_path);
+                match removal {
+                    Ok(_) => info!("Cleaning - Delete folder at {:?}", &remove_path),
+                    Err(_) => error!("Failed to delete at {:?}", &remove_path),
+                }
 
                 (br, repo_data)
             })
@@ -267,15 +267,15 @@ impl Repository {
     }
 }
 
-type Mail = String; // A mail appear in a list of commit identified by a hash
-                    // A Person commiting with his name and all the commit he pushed
+type Mail = String;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Committer {
-    pub mails: BTreeMap<Mail, Vec<String>>,
+    pub mails: BTreeMap<Mail, Vec<Mail>>,
 }
 
 impl Committer {
-    pub fn new(mail: String, commit_id: String) -> Self {
+    pub fn new(mail: Mail, commit_id: String) -> Self {
         let mut commits_for_mail = BTreeMap::new();
         commits_for_mail.insert(mail, vec![commit_id]);
 

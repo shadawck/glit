@@ -1,5 +1,6 @@
 use git2::Sort;
-use std::{fs::remove_dir_all, path::PathBuf, thread};
+use std::{path::PathBuf, thread};
+use tracing::info;
 
 use crate::repo::Committers;
 
@@ -15,10 +16,10 @@ impl Log {
 
         revwalk.push_head().unwrap();
 
-        println!(
-            "Build log for {:#?} with thread ID : {:?}",
-            path,
-            thread::current().id()
+        info!(
+            "[{:?}][{:?}] Build log by revwalking",
+            thread::current().id(),
+            &path
         );
 
         for commit_id in revwalk {
@@ -26,8 +27,6 @@ impl Log {
 
             repo_data.update(&repo, commit_id);
         }
-
-        remove_dir_all(path).unwrap();
         repo_data
     }
 }

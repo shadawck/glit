@@ -18,8 +18,6 @@ impl<T> Printer<T> {
 
 impl Printer<Repository> {
     pub fn print_repo(&self, data: &Repository) {
-        //println!("Check mail for {}", self.repo_name);
-
         if self.global_config.verbose {
         } else {
             for (branch, value) in &data.branch_data {
