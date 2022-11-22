@@ -1,8 +1,58 @@
-# Glit
+<div align="center">
 
-Osint tool - Retrieve all mails of user related to a git repository, a git user or a git organization.
+# glit
 
-## Install
+[glit]() is a little osint tool to etrieve all mails of user related to a git repository, a git user or a git organization.
+
+**README Sections:**  [Use](#use) — [Installation](#installation)
+
+</div>
+
+# Use
+
+### Commands
+
+```bash
+Usage: glit [OPTIONS] [COMMAND]
+
+Commands:
+  repo  Extract emails from repository
+  org   Extract emails from all repositories of a github organisation.
+  user  Extract emails from all repositories of a user
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -v, --verbose        Add information on commit hash, username ...
+  -o, --output <PATH>  export data to json
+  -h, --help           Print help information
+  -V, --version        Print version information
+```
+
+#### **Repository**
+
+Fetch emails of all user/committer related to a repository.
+
+```bash
+glit repo -a -u https://github.com/rust-lang/git2-rs
+```
+
+#### **User**
+
+Fetch emails of all user/committer from all repositories of a user.
+
+```bash
+glit user -a -u https://github.com/rust
+```
+
+#### **Organization**
+
+Fetch emails of all user/committer from all repositories of an organization.
+
+```bash
+glit org -a -u https://github.com/netflix
+```
+
+# Installation
 
 ### With cargo
 
@@ -12,62 +62,9 @@ cargo install glit
 
 ### From Github Release
 
-## Use
-
-### Repository
-
-Fetch emails of all user/committer related to a repository.
+[Download a release](https://github.com/shadawck/glit/releases/lastest), extract and run.
 
 ```bash
-glit repo -a -u https://github.com/rust-lang/git2-rs
+tar -xvf glit-x86_64-unknown-linux-gnu-v0.2.0.tgz
+mv glit /usr/local/bin/
 ```
-
-### User
-
-Fetch emails of all user/committer from all repositories of a user.
-
-```bash
-glit user -a -u https://github.com/rust
-```
-
-### Organization
-
-Fetch emails of all user/committer from all repositories of an organization.
-
-```bash
-glit org -a -u https://github.com/netflix
-```
-
-### Test Org
-
-- https://github.com/mineiros-io : 83 repositories
-  - only main
-    [x] Do not crash
-    [ ] Crash
-  - all branches
-    [ ] Do not crash
-    [x] Crash
-
-- https://github.com/mineiros-io : 88 source repositories
-  - only main
-    [x] Do not crash (light blocking)
-    [ ] Crash
-  - all branches
-    [x] Do not crash
-    [ ] Crash
-
-- https://github.com/facebook : 109 source repositories
-  - only main
-    [ ] Do not crash (light blocking)
-    [ ] Crash
-  - all branches
-    [ ] Do not crash
-    [ ] Crash
-
-- https://github.com/netflix : 109 source repositories
-  - only main
-    [ ] Do not crash (light blocking)
-    [ ] Crash
-  - all branches
-    [ ] Do not crash
-    [ ] Crash
