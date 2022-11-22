@@ -60,7 +60,7 @@ impl UserFactory {
             pages_urls,
             all_branches: self.all_branches,
             repositories_data: DashMap::<_, _, RandomState>::with_capacity_and_hasher(
-                repo_count as usize,
+                repo_count,
                 RandomState::new(),
             ),
         }

@@ -35,7 +35,7 @@ pub trait Factory {
     }
 
     fn _build_repo_links(page_url: Url, repo_count: usize, pages_count: usize) -> Vec<Url> {
-        let mut pages_urls = Vec::with_capacity(repo_count as usize);
+        let mut pages_urls = Vec::with_capacity(repo_count);
         for i in 1..pages_count + 1 {
             let url = format!("{}&page={}", page_url, i);
             pages_urls.push(Url::parse(&url).unwrap());
@@ -59,7 +59,7 @@ pub trait ExtractLog {
         let pages_urls = self.get_pages_url();
         let url = self.get_url();
 
-        let (tx_url, rx_url) = bounded(repo_count as usize);
+        let (tx_url, rx_url) = bounded(repo_count);
         let mut tokio_handles = Vec::with_capacity(pages_urls.len());
         for page in pages_urls {
             let client = client.clone();
@@ -93,25 +93,17 @@ pub trait ExtractLog {
         }
         drop(tx_url);
 
-        //let queue = Arc::new(ArrayQueue::new(self.repo_count);
-        let mut queue_handles = Vec::with_capacity(repo_count as usize);
+        let mut queue_handles = Vec::with_capacity(repo_count);
         let (tx, rx) = bounded(repo_count);
 
         for _ in 0..repo_count {
-            //let queue = queue.clone();
             let tx = tx.clone();
             let rx_url = rx_url.clone();
 
             let handle = rayon::spawn(move || {
                 let clonable_url = rx_url.recv().unwrap();
-
-                let repo_config = RepositoryConfig {
-                    url: clonable_url,
-                    all_branches,
-                };
-
+                let repo_config = RepositoryConfig::new(clonable_url, all_branches);
                 let repo = RepositoryFactory::with_config(repo_config).create();
-
                 tx.send(repo).unwrap();
                 drop(tx);
             });
@@ -121,10 +113,14 @@ pub trait ExtractLog {
         drop(tx);
         drop(rx_url);
 
-        let pool = ThreadPoolBuilder::new().num_threads(8).build().unwrap();
-        let hasher = RandomState::new();
+        let current_num_thread = rayon::current_num_threads();
+        let pool = ThreadPoolBuilder::new()
+            .num_threads(current_num_thread)
+            .build()
+            .unwrap();
+
         let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
-            DashMap::with_capacity_and_hasher(repo_count as usize, hasher),
+            DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
         );
 
         let dash_result = pool.scope(move |scope| {
@@ -133,11 +129,10 @@ pub trait ExtractLog {
                 let rx = rx.clone();
 
                 scope.spawn(move |_| {
-                    // let loc = queue.pop().unwrap();
                     let repo = rx.recv().unwrap();
                     drop(rx);
-                    let data = repo.clone().extract_log();
 
+                    let data = repo.clone().extract_log();
                     let repo_name_key = RepoName(repo.name);
                     dash.insert(repo_name_key, data);
                 })

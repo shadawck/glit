@@ -25,7 +25,7 @@ impl Log {
         let walk_iter_count = walk.len();
 
         for (i, commit_id) in walk.into_iter().enumerate() {
-            if i % 100 == 0 {
+            if i % 1000 == 0 {
                 info!("Revwalk iteration {}/{} ", i, walk_iter_count);
             }
 
