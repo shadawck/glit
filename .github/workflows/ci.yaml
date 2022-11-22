@@ -1,0 +1,63 @@
+name: continuous_integration
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-rust
+        with:
+          components: rustfmt
+
+      - name: Run rustfmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-rust
+        with:
+          components: clippy
+
+      - name: Run clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --locked --all-targets  -- -D warnings # --all-features --workspace
+
+  test_code_coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run llvm-cov and upload to codecov
+        uses: ./.github/actions/cargo-llvm-cov
+        with:
+          codecov_token: ${{ secrets.CODECOV_TOKEN }}
+
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-rust
+
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --release --verbose

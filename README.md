@@ -4,9 +4,13 @@ Osint tool - Retrieve all mails of user related to a git repository, a git user 
 
 ## Install
 
+### With cargo
+
 ```bash
 cargo install glit
 ```
+
+### From Github Release
 
 ## Use
 
@@ -15,7 +19,7 @@ cargo install glit
 Fetch emails of all user/committer related to a repository.
 
 ```bash
-glit repo -a -u https://github.com/rust-lang/git2-rs/
+glit repo -a -u https://github.com/rust-lang/git2-rs
 ```
 
 ### User
@@ -31,10 +35,8 @@ glit user -a -u https://github.com/rust
 Fetch emails of all user/committer from all repositories of an organization.
 
 ```bash
-glit org -a -u https://github.com/rust-lang
+glit org -a -u https://github.com/netflix
 ```
-
-
 
 ### Test Org
 
@@ -55,6 +57,14 @@ glit org -a -u https://github.com/rust-lang
     [ ] Crash
 
 - https://github.com/facebook : 109 source repositories
+  - only main
+    [ ] Do not crash (light blocking)
+    [ ] Crash
+  - all branches
+    [ ] Do not crash
+    [ ] Crash
+
+- https://github.com/netflix : 109 source repositories
   - only main
     [ ] Do not crash (light blocking)
     [ ] Crash

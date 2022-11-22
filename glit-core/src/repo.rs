@@ -19,6 +19,7 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
     str::FromStr,
+    time::Instant,
 };
 use tracing::{error, info};
 
@@ -63,8 +64,18 @@ impl RepositoryFactory {
     }
 
     fn get_head_branch(repo: &git2::Repository) -> String {
-        let head = repo.head().unwrap();
-        head.name().unwrap().split('/').last().unwrap().to_string()
+        let head = repo.head();
+        if head.is_ok() {
+            head.unwrap()
+                .name()
+                .unwrap()
+                .split('/')
+                .last()
+                .unwrap()
+                .to_string()
+        } else {
+            "".to_string()
+        }
     }
 
     pub fn fetch_branches(repository: &git2::Repository, head: &str) -> Vec<BranchName> {
@@ -213,7 +224,9 @@ impl RepositoryFactory {
         let mut clone_paths: Vec<PathBuf> = Vec::new();
         let repo: git2::Repository = Self::clone(&self.url, clone_location.as_path()).unwrap();
         let head = Self::get_head_branch(&repo);
-        clone_paths.push(clone_location);
+        if !head.is_empty() {
+            clone_paths.push(clone_location);
+        }
 
         // Clone all branches
         if self.all_branches {
@@ -250,7 +263,9 @@ impl Repository {
             .into_iter()
             .zip(self.clone_paths.clone())
             .map(|(br, pt)| {
+                let t1 = Instant::now();
                 let repo_data = Log::build(pt.clone());
+                println!("Build log Time : {:?}", t1.elapsed());
 
                 let remove_path = pt.parent().unwrap();
                 let removal = remove_dir_all(&remove_path);
@@ -287,7 +302,7 @@ impl Committer {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Committers {
-    pub committers: BTreeMap<AuthorName, Committer>,
+    pub committers: HashMap<AuthorName, Committer>,
 }
 
 impl Default for Committers {
@@ -299,7 +314,7 @@ impl Default for Committers {
 impl Committers {
     pub fn new() -> Self {
         Self {
-            committers: BTreeMap::<AuthorName, Committer>::new(),
+            committers: HashMap::<AuthorName, Committer>::new(),
         }
     }
 
@@ -309,30 +324,51 @@ impl Committers {
         let author: AuthorName = AuthorName(commit_sigature.name().unwrap_or("").to_string());
         let mail = commit_sigature.email().unwrap_or("").to_string();
 
+        self.committers
+            .entry(author.clone())
+            .and_modify(|committer| {
+                // Author key exist. Need to modify it.
+                committer
+                    .mails
+                    .entry(mail.clone())
+                    .and_modify(|commit_ids| {
+                        // Mail Key exist
+                        commit_ids.push(commit_id.to_string());
+                    })
+                    .or_insert(
+                        // Mail Key do not exist
+                        vec![commit_id.to_string()],
+                    );
+            })
+            .or_insert(
+                // Author Key do not exist
+                Committer::new(mail, commit_id.to_string()),
+            );
+
         // To use only on first insertion
-        let committer = Committer::new(mail.clone(), commit_id.to_string());
-
-        if self.committers.contains_key(&author) {
-            let mut existing_commiter = self.committers.get_mut(&author).unwrap().to_owned();
-
-            if !existing_commiter.mails.contains_key(&mail) {
-                existing_commiter.mails.insert(mail.clone(), vec![]);
-
-                self.committers.insert(author.clone(), existing_commiter);
-            }
-
-            // Update commit_id list
-            let mut actual_committer = self.committers.get_mut(&author).unwrap().to_owned();
-            let mut commit_ids = actual_committer.mails.get_mut(&mail).unwrap().to_owned();
-
-            commit_ids.push(commit_id.to_string());
-            actual_committer.mails.insert(mail, commit_ids);
-
-            // insert modified version of commiter
-            self.committers.insert(author, actual_committer);
-        } else {
-            self.committers.insert(author.clone(), committer);
-        }
+        // Litlle faster but not cleaner
+        //let committer = Committer::new(mail.clone(), commit_id.to_string());
+        //if self.committers.contains_key(&author) {
+        //    let mut existing_commiter = self.committers.get_mut(&author).unwrap().to_owned();
+        //
+        //    if !existing_commiter.mails.contains_key(&mail) {
+        //        existing_commiter.mails.insert(mail.clone(), vec![]);
+        //
+        //        self.committers.insert(author.clone(), existing_commiter);
+        //    }
+        //
+        //    // Update commit_id list
+        //    let mut actual_committer = self.committers.get_mut(&author).unwrap().to_owned();
+        //    let mut commit_ids = actual_committer.mails.get_mut(&mail).unwrap().to_owned();
+        //
+        //    commit_ids.push(commit_id.to_string());
+        //    actual_committer.mails.insert(mail, commit_ids);
+        //
+        //    // insert modified version of commiter
+        //    self.committers.insert(author, actual_committer);
+        //} else {
+        //    self.committers.insert(author.clone(), committer);
+        //}
 
         self.to_owned()
     }

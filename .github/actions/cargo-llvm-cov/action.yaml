@@ -1,0 +1,39 @@
+name: Code Coverage
+description: Setup cargo-llvm and codecov
+inputs:
+  codecov_token:
+    description: "Codecov token"
+    required: true
+#  output_path:
+#    description: "Output path of the code coverage file"
+#    default: lcov.info
+#    required: true
+#  format:
+#    description: "Format for code coverage (html, lcov, text...)"
+#    default: lcov
+#    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup rust
+      uses: ./.github/actions/setup-rust
+
+    # Documentation : https://github.com/taiki-e/cargo-llvm-cov
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@cargo-llvm-cov
+
+    # Documentation : https://github.com/actions-rs/cargo
+    - name: Run llvm-cov
+      uses: actions-rs/cargo@v1
+      with:
+        command: llvm-cov
+        args: --all-features --workspace --lcov --output-path lcov.info
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        token: ${{ inputs.codecov_token }}
+        files: lcov.info
+        fail_ci_if_error: true
+        verbose: true

@@ -1,0 +1,32 @@
+name: Setup Rust
+description: Setup Rust with specified toolchain, target and components.
+inputs:
+  toolchain:
+    description: "Toolchain"
+    default: stable
+    required: true
+  target:
+    description: "Target"
+    required: true
+  components:
+    description: "Components"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Work around for sporadic issues with rustup self-update on windows
+    - run: rustup set auto-self-update disable
+      if: contains(runner.os, 'windows')
+      shell: bash
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        target: ${{ inputs.target }}
+        default: true
+        components: ${{ inputs.components }}
+        profile: minimal
+
+    - uses: Swatinem/rust-cache@v1.3.0

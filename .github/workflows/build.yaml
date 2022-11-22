@@ -1,0 +1,158 @@
+name: Build
+### Will be called by publish workflow or manually
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: ["main"]
+
+jobs:
+  call_continuous_workflow:
+    uses: ./.github/workflows/ci.yaml
+
+  get_version:
+    needs: call_continuous_workflow
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.cargo_version }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-rust
+
+      - name: Fetch cargo.toml version
+        run: |
+          echo CURRENT_VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name=="glit") | .version') >> $GITHUB_ENV
+
+      - name: Register env.CURRENT_VERSION as outputs value for later jobs
+        id: version
+        run: |
+          echo ${{ format('v{0}', env.CURRENT_VERSION) }}
+          echo ::set-output name=cargo_version::${{ format('v{0}', env.CURRENT_VERSION) }}
+
+  build:
+    needs: get_version
+
+    name: Build for ${{ matrix.os }}-${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          ### LINUX
+          - build: x86_64-gnu-linux
+            os: ubuntu-latest
+            toolchain: stable
+            target: x86_64-unknown-linux-gnu
+            cross: false
+            artifact_path: target/x86_64-unknown-linux-gnu/release/glit
+
+          - build: aarch64-gnu-linux
+            os: ubuntu-latest
+            toolchain: stable
+            target: aarch64-unknown-linux-gnu
+            cross: true
+            artifact_path: target/aarch64-unknown-linux-gnu/release/glit
+
+          - build: x86_64-musl-linux
+            os: ubuntu-latest
+            toolchain: stable
+            target: x86_64-unknown-linux-musl
+            cross: true
+            artifact_path: target/x86_64-unknown-linux-musl/release/glit
+
+          - build: aarch64-musl-linux
+            os: ubuntu-latest
+            toolchain: stable
+            target: aarch64-unknown-linux-musl
+            cross: true
+            artifact_path: target/aarch64-unknown-linux-musl/release/glit
+
+          - build: armv7-gnu-linux
+            os: ubuntu-latest
+            toolchain: stable
+            target: armv7-unknown-linux-gnueabihf
+            cross: true
+            artifact_path: target/armv7-unknown-linux-gnueabihf/release/glit
+
+          ### MACOS
+          - build: x86_64-macos
+            os: macos-latest
+            toolchain: stable
+            target: x86_64-apple-darwin
+            cross: false
+            artifact_path: target/x86_64-apple-darwin/release/glit
+
+          - build: aarch64-macos
+            os: macos-latest
+            toolchain: stable
+            target: aarch64-apple-darwin
+            cross: false
+            artifact_path: target/aarch64-apple-darwin/release/glit
+
+          ### WINDOWS
+          - build: x86_64-msvc-windows
+            os: windows-latest
+            toolchain: stable
+            target: x86_64-pc-windows-msvc
+            cross: false
+            artifact_path: target/x86_64-pc-windows-msvc/release/glit.exe
+
+          - build: i686-msvc-windows
+            os: windows-latest
+            toolchain: stable
+            target: i686-pc-windows-msvc
+            cross: false
+            artifact_path: target/i686-pc-windows-msvc/release/glit.exe
+
+          ## TODO: ring need to be build for aarch64
+          #- build: aarch64-msvc-windows
+          #  os: windows-latest
+          #  toolchain: stable
+          #  target: aarch64-pc-windows-msvc
+          #  cross: false
+          #  artifact_path: target/aarch64-pc-windows-msvc/release/glit.exe
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+          toolchain: ${{ matrix.toolchain }}
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target=${{ matrix.target }}
+          use-cross: ${{ matrix.cross }}
+
+      - name: Create RELEASE_ARTIFACT_PATH on linux and macos
+        if: contains(matrix.os, 'ubuntu') || contains(matrix.os, 'macos')
+        run: |
+          echo version output in get_version: ${{ format('{0}', needs.get_version.outputs.version)}}
+          echo RELEASE_ARTIFACT_PATH=${{format('glit-{0}-{1}', matrix.target, needs.get_version.outputs.version) }} >> $GITHUB_ENV
+
+      - name: Create RELEASE_ARTIFACT_PATH on windows
+        if: contains(matrix.os, 'windows')
+        run: |
+          echo version output in get_version: ${{ format('{0}', needs.get_version.outputs.version)}}
+          echo RELEASE_ARTIFACT_PATH=${{format('glit-{0}-{1}', matrix.target, needs.get_version.outputs.version) }} | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: package and create tar archive
+        run: |
+          mkdir ${{ env.RELEASE_ARTIFACT_PATH }}
+          cp ${{ matrix.artifact_path }} ${{ env.RELEASE_ARTIFACT_PATH }}
+          tar -czvf ${{ env.RELEASE_ARTIFACT_PATH }}.tgz ${{ env.RELEASE_ARTIFACT_PATH }}
+
+      - name: Upload binaries to release
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.RELEASE_ARTIFACT_PATH }}.tgz
+          path: ${{ env.RELEASE_ARTIFACT_PATH }}.tgz
