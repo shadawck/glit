@@ -23,13 +23,11 @@ impl Log {
 
         let walk: Vec<Oid> = revwalk.into_iter().map(|id| id.unwrap()).collect();
         let walk_iter_count = walk.len();
-        let mut i = 0;
 
-        for commit_id in walk {
+        for (i, commit_id) in walk.into_iter().enumerate() {
             if i % 100 == 0 {
                 info!("Revwalk iteration {}/{} ", i, walk_iter_count);
             }
-            i = i + 1;
 
             repo_data.update(&repo, commit_id);
         }

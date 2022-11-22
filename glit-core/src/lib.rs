@@ -93,9 +93,9 @@ pub trait ExtractLog {
         }
         drop(tx_url);
 
-        //let queue = Arc::new(ArrayQueue::new(self.repo_count.try_into().unwrap()));
+        //let queue = Arc::new(ArrayQueue::new(self.repo_count);
         let mut queue_handles = Vec::with_capacity(repo_count as usize);
-        let (tx, rx) = bounded(repo_count.try_into().unwrap());
+        let (tx, rx) = bounded(repo_count);
 
         for _ in 0..repo_count {
             //let queue = queue.clone();

@@ -65,8 +65,8 @@ impl RepositoryFactory {
 
     fn get_head_branch(repo: &git2::Repository) -> String {
         let head = repo.head();
-        if head.is_ok() {
-            head.unwrap()
+        if let Ok(head_ref) = head {
+            head_ref
                 .name()
                 .unwrap()
                 .split('/')
@@ -325,7 +325,7 @@ impl Committers {
         let mail = commit_sigature.email().unwrap_or("").to_string();
 
         self.committers
-            .entry(author.clone())
+            .entry(author)
             .and_modify(|committer| {
                 // Author key exist. Need to modify it.
                 committer
@@ -335,15 +335,13 @@ impl Committers {
                         // Mail Key exist
                         commit_ids.push(commit_id.to_string());
                     })
-                    .or_insert(
+                    .or_insert_with(||
                         // Mail Key do not exist
-                        vec![commit_id.to_string()],
-                    );
+                        vec![commit_id.to_string()]);
             })
-            .or_insert(
+            .or_insert_with(||
                 // Author Key do not exist
-                Committer::new(mail, commit_id.to_string()),
-            );
+                Committer::new(mail, commit_id.to_string()));
 
         // A little bit faster but not cleaner
         //let committer = Committer::new(mail.clone(), commit_id.to_string());
