@@ -17,7 +17,6 @@ tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 clap = { version = "4.0.12", features = ["cargo"] }
 futures = "0.3.24"
 scraper = "0.13.0"
-url = "2.3.1"
 git2 = "0.15.0"
 rand = "0.8.5"
 ahash = "0.8.2"
@@ -25,9 +24,7 @@ serde = { version = "1.0.147", features = ["derive"] }
 colored = "2.0.0"
 rayon = "1.5.3"
 crossbeam = "0.8.2"
-tokio-uring = "0.4.0"
 dashmap = { version = "5.4.0", features = ["serde"] }
 url_serde = "0.2.0"
 async-trait = "0.1.58"
-log = "0.4.17"
 tracing = "0.1.37"

@@ -318,7 +318,7 @@ impl Committers {
         }
     }
 
-    pub fn update(&mut self, repo: &git2::Repository, commit_id: Oid) -> Self {
+    pub fn update(&mut self, repo: &git2::Repository, commit_id: Oid) -> &Self {
         let commit = repo.find_commit(commit_id).unwrap();
         let commit_sigature = commit.author();
         let author: AuthorName = AuthorName(commit_sigature.name().unwrap_or("").to_string());
@@ -345,8 +345,7 @@ impl Committers {
                 Committer::new(mail, commit_id.to_string()),
             );
 
-        // To use only on first insertion
-        // Litlle faster but not cleaner
+        // A little bit faster but not cleaner
         //let committer = Committer::new(mail.clone(), commit_id.to_string());
         //if self.committers.contains_key(&author) {
         //    let mut existing_commiter = self.committers.get_mut(&author).unwrap().to_owned();
@@ -370,7 +369,7 @@ impl Committers {
         //    self.committers.insert(author.clone(), committer);
         //}
 
-        self.to_owned()
+        self
     }
 }
 

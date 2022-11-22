@@ -19,13 +19,13 @@ pub mod repo;
 pub mod types;
 pub mod user;
 
-const NUMBER_OF_REPO_PER_PAGE: u32 = 30;
+const NUMBER_OF_REPO_PER_PAGE: usize = 30;
 
 #[async_trait]
 pub trait Factory {
-    async fn _repositories_count(client: &Client, url: Url) -> u32;
+    async fn _repositories_count(client: &Client, url: Url) -> usize;
 
-    fn _pages_count(repo_count: u32) -> u32 {
+    fn _pages_count(repo_count: usize) -> usize {
         let modulo = repo_count % NUMBER_OF_REPO_PER_PAGE;
         if modulo.eq(&0) {
             repo_count / NUMBER_OF_REPO_PER_PAGE
@@ -34,8 +34,8 @@ pub trait Factory {
         }
     }
 
-    fn _build_repo_links(page_url: Url, pages_count: u32) -> Vec<Url> {
-        let mut pages_urls = Vec::new();
+    fn _build_repo_links(page_url: Url, repo_count: usize, pages_count: usize) -> Vec<Url> {
+        let mut pages_urls = Vec::with_capacity(repo_count as usize);
         for i in 1..pages_count + 1 {
             let url = format!("{}&page={}", page_url, i);
             pages_urls.push(Url::parse(&url).unwrap());
@@ -60,7 +60,7 @@ pub trait ExtractLog {
         let url = self.get_url();
 
         let (tx_url, rx_url) = bounded(repo_count as usize);
-        let mut tokio_handles = Vec::new();
+        let mut tokio_handles = Vec::with_capacity(pages_urls.len());
         for page in pages_urls {
             let client = client.clone();
             let url = url.clone();
@@ -94,7 +94,7 @@ pub trait ExtractLog {
         drop(tx_url);
 
         //let queue = Arc::new(ArrayQueue::new(self.repo_count.try_into().unwrap()));
-        let mut queue_handles = Vec::new();
+        let mut queue_handles = Vec::with_capacity(repo_count as usize);
         let (tx, rx) = bounded(repo_count.try_into().unwrap());
 
         for _ in 0..repo_count {
@@ -160,7 +160,7 @@ pub trait ExtractLog {
     async fn extract_log(mut self, client: &Client) -> Self;
 
     // Common Getter
-    fn get_repo_count(&self) -> u32;
+    fn get_repo_count(&self) -> usize;
     fn get_all_branches(&self) -> bool;
     fn get_url(&self) -> Url;
     fn get_pages_url(&self) -> Vec<Url>;

@@ -12,7 +12,7 @@ pub struct User {
     pub name: String,
     #[serde(skip)]
     pub url: Url,
-    pub repo_count: u32,
+    pub repo_count: usize,
     #[serde(skip)]
     pub pages_urls: Vec<Url>,
     #[serde(skip)]
@@ -51,7 +51,7 @@ impl UserFactory {
     pub async fn build_with_client(self, client: &Client) -> User {
         let repo_count = Self::_repositories_count(client, self.page_url.clone()).await;
         let pages_count = Self::_pages_count(repo_count);
-        let pages_urls = Self::_build_repo_links(self.page_url, pages_count);
+        let pages_urls = Self::_build_repo_links(self.page_url, repo_count, pages_count);
 
         User {
             name: self.name,
@@ -69,7 +69,7 @@ impl UserFactory {
 
 #[async_trait]
 impl Factory for UserFactory {
-    async fn _repositories_count(client: &Client, url: Url) -> u32 {
+    async fn _repositories_count(client: &Client, url: Url) -> usize {
         let resp = client.get(url).send().await.unwrap();
         let text = resp.text().await.unwrap();
 
@@ -86,7 +86,7 @@ impl Factory for UserFactory {
         repository_count_str
             .trim()
             .replace(',', "")
-            .parse::<u32>()
+            .parse::<usize>()
             .unwrap()
     }
 }
@@ -101,7 +101,7 @@ impl ExtractLog for User {
         self
     }
 
-    fn get_repo_count(&self) -> u32 {
+    fn get_repo_count(&self) -> usize {
         self.repo_count
     }
 

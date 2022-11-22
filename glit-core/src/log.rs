@@ -1,11 +1,6 @@
 use git2::{Oid, Sort};
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use std::{
-    path::PathBuf,
-    thread,
-    time::{Duration, Instant},
-};
-use tracing::{debug, info};
+use std::{path::PathBuf, thread};
+use tracing::info;
 
 use crate::repo::Committers;
 
@@ -27,12 +22,8 @@ impl Log {
         );
 
         let walk: Vec<Oid> = revwalk.into_iter().map(|id| id.unwrap()).collect();
-
         let walk_iter_count = walk.len();
         let mut i = 0;
-
-        let t1 = Instant::now();
-        let mut t2 = Duration::new(0, 0);
 
         for commit_id in walk {
             if i % 100 == 0 {
@@ -40,9 +31,7 @@ impl Log {
             }
             i = i + 1;
 
-            let t111 = Instant::now();
             repo_data.update(&repo, commit_id);
-            t2 = t2 + t111.elapsed();
         }
 
         repo_data
