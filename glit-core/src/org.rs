@@ -19,7 +19,8 @@ pub struct Org {
     pub pages_urls: Vec<Url>,
     #[serde(skip)]
     pub all_branches: bool,
-    pub data_file: PathBuf, //pub repositories_data: DashMap<RepoName, Repository, RandomState>,
+    //pub data_file: PathBuf,
+    pub repositories_data: DashMap<RepoName, Repository, RandomState>,
 }
 
 pub struct OrgFactory {
@@ -68,11 +69,11 @@ impl OrgFactory {
             repo_count,
             pages_urls,
             all_branches: self.all_branches,
-            data_file,
-            //repositories_data: DashMap::<_, _, RandomState>::with_capacity_and_hasher(
-            //    repo_count,
-            //    RandomState::new(),
-            //),
+            //data_file,
+            repositories_data: DashMap::<_, _, RandomState>::with_capacity_and_hasher(
+                repo_count,
+                RandomState::new(),
+            ),
         }
     }
 }
@@ -109,7 +110,7 @@ impl ExtractLog for Org {
         )
         .unwrap();
 
-        self.data_file = Self::common_log_feature(&self, client, org_selector).await;
+        self.repositories_data = Self::common_log_feature(&self, client, org_selector).await;
         self
     }
 

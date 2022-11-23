@@ -1,5 +1,5 @@
 use crate::{config::RepositoryConfig, repo::RepositoryFactory};
-use ahash::RandomState;
+use ahash::{HashMap, RandomState};
 use async_trait::async_trait;
 use crossbeam::channel::bounded;
 use dashmap::DashMap;
@@ -10,7 +10,6 @@ use repo::Repository;
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 use std::{
-    fmt::format,
     fs::{File, OpenOptions},
     io::Write,
     path::PathBuf,
@@ -19,7 +18,6 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-    time::Instant,
 };
 
 use tracing::{error, info};
@@ -60,7 +58,11 @@ pub trait Factory {
 
 #[async_trait]
 pub trait ExtractLog {
-    async fn common_log_feature(&self, client: &Client, selector: Selector) -> PathBuf {
+    async fn common_log_feature(
+        &self,
+        client: &Client,
+        selector: Selector,
+    ) -> DashMap<RepoName, Repository, RandomState> {
         let repo_count = self.get_repo_count();
         let all_branches = self.get_all_branches();
         let pages_urls = self.get_pages_url();
@@ -105,23 +107,28 @@ pub trait ExtractLog {
         drop(tx_url);
 
         let mut queue_handles = Vec::with_capacity(repo_count);
-        let (tx, rx) = bounded(repo_count);
+        //let (tx, rx) = bounded(repo_count);
 
+        let send_repo_queue = Arc::new(Queue::new(repo_count));
+        let recv_repo_queue = send_repo_queue.clone();
+        let atomic_repo_count: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
         for _ in 0..repo_count {
-            let tx = tx.clone();
+            //let tx = tx.clone();
             let rx_url = rx_url.clone();
+            let send_repo_queue = send_repo_queue.clone();
 
             let handle = rayon::spawn(move || {
                 let clonable_url = rx_url.recv().unwrap();
                 let repo_config = RepositoryConfig::new(clonable_url, all_branches);
                 let repo = RepositoryFactory::with_config(repo_config).create();
-                tx.send(repo).unwrap();
-                drop(tx);
+                //tx.send(repo.clone()).unwrap();
+                send_repo_queue.try_push(repo).unwrap();
+                //drop(tx);
             });
 
             queue_handles.push(handle)
         }
-        drop(tx);
+        //drop(tx);
         drop(rx_url);
 
         let current_num_thread = rayon::current_num_threads();
@@ -130,59 +137,75 @@ pub trait ExtractLog {
             .build()
             .unwrap();
 
-        //let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
-        //    DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
-        //);
-        let send_queue = Arc::new(Queue::new(repo_count));
-        let recv_queue = send_queue.clone();
-        let atomic_count: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
-        let mut file = OpenOptions::new()
-            .append(true)
-            .open(save_file_name)
-            .unwrap();
+        let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
+            DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
+        );
+        //let send_queue = Arc::new(Queue::new(repo_count));
+        //let recv_queue = send_queue.clone();
+        //let atomic_count: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+        //let mut file = OpenOptions::new()
+        //    .append(true)
+        //    .open(save_file_name)
+        //    .unwrap();
 
         let dash_result = pool.scope(move |scope| {
             for _ in 0..repo_count {
-                // let dash = dash.clone();
-                let rx = rx.clone();
-                let send_queue = send_queue.clone();
+                let dash = dash.clone();
+                //let rx = rx.clone();
+                //let send_queue = send_queue.clone();
+                let recv_repo_queue = recv_repo_queue.clone();
+                let atomic_repo_count = atomic_repo_count.clone();
 
-                scope.spawn(move |_| {
-                    let repo = rx.recv().unwrap();
-                    drop(rx);
+                scope.spawn(move |_| loop {
+                    let pop = recv_repo_queue.try_pop();
+                    if pop.is_some() {
+                        let repo = pop.unwrap();
+                        let data = repo.clone().extract_log();
+                        let repo_name_key = RepoName(repo.name);
 
-                    let data = repo.clone().extract_log();
-                    let repo_name_key = RepoName(repo.name);
-                    send_queue
-                        .try_push((repo_name_key.clone(), data.clone()))
-                        .unwrap();
+                        dash.insert(repo_name_key, data);
+
+                        atomic_repo_count.fetch_add(1, Ordering::SeqCst);
+                        if atomic_repo_count.load(Ordering::SeqCst) == repo_count {
+                            break;
+                        }
+                    }
+                    //let repo = rx.recv().unwrap();
+                    //drop(rx);
+
+                    //let data = repo.clone().extract_log();
+                    //let repo_name_key = RepoName(repo.name);
+                    //send_queue
+                    //    .try_push((repo_name_key.clone(), data.clone()))
+                    //    .unwrap();
+
                     //dash.insert(repo_name_key, data);
                 })
             }
 
-            scope.spawn(move |_| loop {
-                let pop = recv_queue.try_pop();
-                if pop.is_some() {
-                    let (key, data) = pop.unwrap();
-                    let json: String = serde_json::to_string(&data).unwrap();
-                    let format = format!("\"{}\" : {},", key.to_string(), json);
-                    file.write_all(format.as_bytes()).unwrap();
+            //scope.spawn(move |_| loop {
+            //    let pop = recv_queue.try_pop();
+            //    if pop.is_some() {
+            //        let (key, data) = pop.unwrap();
+            //        let json: String = serde_json::to_string(&data).unwrap();
+            //        let format = format!("\"{}\" : {},", key.to_string(), json);
+            //        file.write_all(format.as_bytes()).unwrap();
+            //
+            //        atomic_count.fetch_add(1, Ordering::Relaxed);
+            //        if atomic_count.load(Ordering::Relaxed) == repo_count {
+            //            break;
+            //        }
+            //    }
+            //});
 
-                    atomic_count.fetch_add(1, Ordering::Relaxed);
-                    if atomic_count.load(Ordering::Relaxed) == repo_count {
-                        break;
-                    }
-                }
-            });
-
-            //dash
+            dash
         });
         drop(pool);
 
         join_all(tokio_handles).await;
 
-        path
-        //Arc::try_unwrap(dash_result).unwrap()
+        //path
+        Arc::try_unwrap(dash_result).unwrap()
     }
 
     async fn extract_log(mut self, client: &Client) -> Self;
