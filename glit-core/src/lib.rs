@@ -3,12 +3,23 @@ use ahash::RandomState;
 use async_trait::async_trait;
 use crossbeam::channel::bounded;
 use dashmap::DashMap;
+use deadqueue::limited::Queue;
 use futures::future::join_all;
 use rayon::ThreadPoolBuilder;
 use repo::Repository;
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
-use std::{sync::Arc, time::Instant};
+use std::{
+    fmt::format,
+    fs::{File, OpenOptions},
+    io::Write,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Instant,
+};
+
 use tracing::{error, info};
 use types::RepoName;
 
@@ -52,12 +63,12 @@ pub trait ExtractLog {
         client: &Client,
         selector: Selector,
     ) -> DashMap<RepoName, Repository, ahash::RandomState> {
-        let start_a = Instant::now();
-
         let repo_count = self.get_repo_count();
         let all_branches = self.get_all_branches();
         let pages_urls = self.get_pages_url();
         let url = self.get_url();
+        let save_file_name = format!("{}.json", self.get_name());
+        let _f = File::create(save_file_name.clone()).unwrap();
 
         let (tx_url, rx_url) = bounded(repo_count);
         let mut tokio_handles = Vec::with_capacity(pages_urls.len());
@@ -115,18 +126,22 @@ pub trait ExtractLog {
 
         let current_num_thread = rayon::current_num_threads();
         let pool = ThreadPoolBuilder::new()
-            .num_threads(current_num_thread)
+            .num_threads(current_num_thread - 2)
             .build()
             .unwrap();
 
         let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
             DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
         );
+        let send_queue = Arc::new(Queue::new(repo_count));
+        let recv_queue = send_queue.clone();
+        let atomic_count: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
 
         let dash_result = pool.scope(move |scope| {
             for _ in 0..repo_count {
                 let dash = dash.clone();
                 let rx = rx.clone();
+                let send_queue = send_queue.clone();
 
                 scope.spawn(move |_| {
                     let repo = rx.recv().unwrap();
@@ -134,20 +149,38 @@ pub trait ExtractLog {
 
                     let data = repo.clone().extract_log();
                     let repo_name_key = RepoName(repo.name);
+                    send_queue
+                        .try_push((repo_name_key.clone(), data.clone()))
+                        .unwrap();
                     dash.insert(repo_name_key, data);
                 })
             }
+
+            let mut file = OpenOptions::new()
+                .append(true)
+                .open(save_file_name)
+                .unwrap();
+
+            scope.spawn(move |_| loop {
+                let pop = recv_queue.try_pop();
+                if pop.is_some() {
+                    let (key, data) = pop.unwrap();
+                    let json: String = serde_json::to_string(&data).unwrap();
+                    let format = format!("\"{}\" : {},", key.to_string(), json);
+                    file.write_all(format.as_bytes()).unwrap();
+
+                    atomic_count.fetch_add(1, Ordering::Relaxed);
+                    if atomic_count.load(Ordering::Relaxed) == repo_count {
+                        break;
+                    }
+                }
+            });
+
             dash
         });
         drop(pool);
 
         join_all(tokio_handles).await;
-
-        info!(
-            "Fetching and Cloning handled in {:?} for {}",
-            start_a.elapsed(),
-            repo_count
-        );
 
         Arc::try_unwrap(dash_result).unwrap()
     }
@@ -159,6 +192,7 @@ pub trait ExtractLog {
     fn get_all_branches(&self) -> bool;
     fn get_url(&self) -> Url;
     fn get_pages_url(&self) -> Vec<Url>;
+    fn get_name(&self) -> String;
 }
 
 pub struct Logger;

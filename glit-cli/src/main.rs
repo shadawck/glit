@@ -5,11 +5,15 @@ pub mod printer;
 pub mod repository_command_handler;
 pub mod user_command_handler;
 pub mod utils;
+use std::fs::{self, File};
+
+use ahash::HashMap;
 use clap::{crate_version, Arg, Command};
 use exporter::Exporter;
 use glit_core::{
     org::{Org, OrgFactory},
     repo::{Repository, RepositoryFactory},
+    types::RepoName,
     user::{User, UserFactory},
     Logger,
 };
@@ -148,7 +152,21 @@ async fn main() {
             printer.print_org(&org_with_log);
 
             let exporter = Exporter::new(global_config.clone());
-            exporter.export_org(&org_with_log)
+            exporter.export_org(&org_with_log);
+
+            let mut data = fs::read_to_string("eleme.json").unwrap();
+            data.pop();
+            //let format = format!("{{\"repositories_data\" : {{{}}} }}", data);
+            let format = format!("{{ {} }}", data);
+            println!("{}", format);
+
+            let data: HashMap<RepoName, Repository> = serde_json::from_str(&format).unwrap();
+
+            let file = File::create("eleme_json.json").unwrap();
+
+            let json: String = serde_json::to_string(&data).unwrap();
+
+            fs::write("eleme_json.json", json).unwrap();
         }
         _ => {}
     }

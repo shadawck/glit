@@ -78,7 +78,7 @@ fn print_mail(mails: Vec<String>, author: &str) {
 }
 
 fn format_mail(mail: &str) -> String {
-    if mail.contains("noreply.github.com") {
+    if mail.contains("noreply.") {
         mail.red().to_string()
     } else {
         mail.green().to_string()

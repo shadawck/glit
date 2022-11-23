@@ -116,4 +116,8 @@ impl ExtractLog for User {
     fn get_pages_url(&self) -> Vec<Url> {
         self.pages_urls.clone()
     }
+
+    fn get_name(&self) -> String {
+        self.name.clone()
+    }
 }
