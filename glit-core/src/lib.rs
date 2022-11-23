@@ -13,6 +13,8 @@ use std::{
     fmt::format,
     fs::{File, OpenOptions},
     io::Write,
+    path::PathBuf,
+    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -58,17 +60,15 @@ pub trait Factory {
 
 #[async_trait]
 pub trait ExtractLog {
-    async fn common_log_feature(
-        &self,
-        client: &Client,
-        selector: Selector,
-    ) -> DashMap<RepoName, Repository, ahash::RandomState> {
+    async fn common_log_feature(&self, client: &Client, selector: Selector) -> PathBuf {
         let repo_count = self.get_repo_count();
         let all_branches = self.get_all_branches();
         let pages_urls = self.get_pages_url();
         let url = self.get_url();
         let save_file_name = format!("{}.json", self.get_name());
-        let _f = File::create(save_file_name.clone()).unwrap();
+
+        let path = PathBuf::from_str(&save_file_name).unwrap();
+        let _f = File::create(path.clone()).unwrap();
 
         let (tx_url, rx_url) = bounded(repo_count);
         let mut tokio_handles = Vec::with_capacity(pages_urls.len());
@@ -130,16 +130,20 @@ pub trait ExtractLog {
             .build()
             .unwrap();
 
-        let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
-            DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
-        );
+        //let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
+        //    DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
+        //);
         let send_queue = Arc::new(Queue::new(repo_count));
         let recv_queue = send_queue.clone();
         let atomic_count: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+        let mut file = OpenOptions::new()
+            .append(true)
+            .open(save_file_name)
+            .unwrap();
 
         let dash_result = pool.scope(move |scope| {
             for _ in 0..repo_count {
-                let dash = dash.clone();
+                // let dash = dash.clone();
                 let rx = rx.clone();
                 let send_queue = send_queue.clone();
 
@@ -152,14 +156,9 @@ pub trait ExtractLog {
                     send_queue
                         .try_push((repo_name_key.clone(), data.clone()))
                         .unwrap();
-                    dash.insert(repo_name_key, data);
+                    //dash.insert(repo_name_key, data);
                 })
             }
-
-            let mut file = OpenOptions::new()
-                .append(true)
-                .open(save_file_name)
-                .unwrap();
 
             scope.spawn(move |_| loop {
                 let pop = recv_queue.try_pop();
@@ -176,13 +175,14 @@ pub trait ExtractLog {
                 }
             });
 
-            dash
+            //dash
         });
         drop(pool);
 
         join_all(tokio_handles).await;
 
-        Arc::try_unwrap(dash_result).unwrap()
+        path
+        //Arc::try_unwrap(dash_result).unwrap()
     }
 
     async fn extract_log(mut self, client: &Client) -> Self;

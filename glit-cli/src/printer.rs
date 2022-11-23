@@ -40,6 +40,9 @@ impl Printer<Repository> {
 impl Printer<User> {
     pub fn print_user(&self, data: &User) {
         let printer = Printer::new(self.global_config.clone());
+
+        let path = data.data_file;
+
         for (repo_name, value) in data.repositories_data.clone() {
             let repo_format = format!("[ Repository : {} ]", repo_name.to_string()).magenta();
             println!("{}", repo_format);

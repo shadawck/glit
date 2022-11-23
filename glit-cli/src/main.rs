@@ -134,8 +134,8 @@ async fn main() {
 
             let user_with_log = Logger::log_for(user, &client).await;
 
-            let printer = Printer::new(global_config.clone());
-            printer.print_user(&user_with_log);
+            //let printer = Printer::new(global_config.clone());
+            //printer.print_user(&user_with_log);
 
             let exporter = Exporter::new(global_config.clone());
             exporter.export_user(&user_with_log)
@@ -146,16 +146,17 @@ async fn main() {
                 .build_with_client(&client)
                 .await;
 
-            let org_with_log = Logger::log_for(org, &client).await;
+            let org_with_log_file = Logger::log_for(org, &client).await;
 
-            let printer = Printer::new(global_config.clone());
-            printer.print_org(&org_with_log);
+            //let printer = Printer::new(global_config.clone());
+            //printer.print_org(&org_with_log_file);
 
             let exporter = Exporter::new(global_config.clone());
-            exporter.export_org(&org_with_log);
+            exporter.export_org(&org_with_log_file);
 
             let mut data = fs::read_to_string("eleme.json").unwrap();
             data.pop();
+
             //let format = format!("{{\"repositories_data\" : {{{}}} }}", data);
             let format = format!("{{ {} }}", data);
             println!("{}", format);

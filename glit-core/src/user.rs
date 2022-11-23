@@ -1,3 +1,5 @@
+use std::{path::PathBuf, str::FromStr};
+
 use ahash::RandomState;
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -17,7 +19,7 @@ pub struct User {
     pub pages_urls: Vec<Url>,
     #[serde(skip)]
     pub all_branches: bool,
-    pub repositories_data: DashMap<RepoName, Repository, RandomState>,
+    pub data_file: PathBuf, //pub repositories_data: DashMap<RepoName, Repository, RandomState>,
 }
 
 pub struct UserFactory {
@@ -52,6 +54,7 @@ impl UserFactory {
         let repo_count = Self::_repositories_count(client, self.page_url.clone()).await;
         let pages_count = Self::_pages_count(repo_count);
         let pages_urls = Self::_build_repo_links(self.page_url, repo_count, pages_count);
+        let data_file = PathBuf::from_str(format!("{}.json", self.name).as_str()).unwrap();
 
         User {
             name: self.name,
@@ -59,10 +62,11 @@ impl UserFactory {
             repo_count,
             pages_urls,
             all_branches: self.all_branches,
-            repositories_data: DashMap::<_, _, RandomState>::with_capacity_and_hasher(
-                repo_count,
-                RandomState::new(),
-            ),
+            data_file,
+            //repositories_data: DashMap::<_, _, RandomState>::with_capacity_and_hasher(
+            //    repo_count,
+            //    RandomState::new(),
+            //),
         }
     }
 }
@@ -97,7 +101,7 @@ impl ExtractLog for User {
         let user_selector =
             Selector::parse(r#"turbo-frame > div > div > ul > li > div > div > h3 > a"#).unwrap();
 
-        self.repositories_data = Self::common_log_feature(&self, client, user_selector).await;
+        self.data_file = Self::common_log_feature(&self, client, user_selector).await;
         self
     }
 
