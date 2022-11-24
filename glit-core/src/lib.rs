@@ -8,7 +8,13 @@ use rayon::ThreadPoolBuilder;
 use repo::Repository;
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Instant,
+};
 use tracing::{error, info};
 use types::RepoName;
 
@@ -123,10 +129,13 @@ pub trait ExtractLog {
             DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
         );
 
+        let atomic_count = Arc::new(AtomicUsize::new(0));
+
         let dash_result = pool.scope(move |scope| {
             for _ in 0..repo_count {
                 let dash = dash.clone();
                 let rx = rx.clone();
+                let atomic_count = atomic_count.clone();
 
                 scope.spawn(move |_| {
                     let repo = rx.recv().unwrap();
@@ -135,6 +144,12 @@ pub trait ExtractLog {
                     let data = repo.clone().extract_log();
                     let repo_name_key = RepoName(repo.name);
                     dash.insert(repo_name_key, data);
+                    atomic_count.fetch_add(1, Ordering::Relaxed);
+                    info!(
+                        "Repository handled : {}/{}",
+                        atomic_count.load(Ordering::Relaxed),
+                        repo_count
+                    );
                 })
             }
             dash
