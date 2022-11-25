@@ -2,7 +2,7 @@
 
 # glit
 
-[glit]() is a little osint tool to etrieve all mails of user related to a git repository, a git user or a git organization.
+**glit** is a little osint tool to retrieve all mails of user related to a git repository, a git user or a git organization.
 
 **README Sections:**  [Use](#use) — [Installation](#installation)
 
@@ -10,7 +10,7 @@
 
 # Use
 
-### Commands
+## Commands
 
 ```bash
 Usage: glit [OPTIONS] [COMMAND]
@@ -33,7 +33,7 @@ Options:
 Fetch emails of all user/committer related to a repository.
 
 ```bash
-glit repo -a -u https://github.com/rust-lang/git2-rs
+glit repo -u https://github.com/rust-lang/git2-rs
 ```
 
 #### **User**
@@ -41,7 +41,7 @@ glit repo -a -u https://github.com/rust-lang/git2-rs
 Fetch emails of all user/committer from all repositories of a user.
 
 ```bash
-glit user -a -u https://github.com/rust
+glit user -u https://github.com/rust
 ```
 
 #### **Organization**
@@ -51,6 +51,12 @@ Fetch emails of all user/committer from all repositories of an organization.
 ```bash
 glit org -a -u https://github.com/netflix
 ```
+
+## Other options
+
+- -a , --all-branches : Search in all branches
+- -o , --output : Write output as **JSON**
+
 
 # Installation
 
