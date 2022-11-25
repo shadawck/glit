@@ -5,6 +5,8 @@ pub mod printer;
 pub mod repository_command_handler;
 pub mod user_command_handler;
 pub mod utils;
+use std::time::Instant;
+
 use clap::{crate_version, Arg, Command};
 use exporter::Exporter;
 use glit_core::{
@@ -111,6 +113,7 @@ async fn main() {
 
     match matches.subcommand() {
         Some(("repo", sub_match)) => {
+            let time = Instant::now();
             let repository_config = RepoCommandHandler::config(sub_match);
             let repository: Repository = RepositoryFactory::with_config(repository_config).create();
 
@@ -120,9 +123,11 @@ async fn main() {
             printer.print_repo(&repo_extraction);
 
             let exporter = Exporter::new(global_config);
-            exporter.export_repo(&repo_extraction)
+            exporter.export_repo(&repo_extraction);
+            println!("Done in {:?}", time.elapsed());
         }
         Some(("user", sub_match)) => {
+            let time = Instant::now();
             let user_config = UserCommandHandler::config(sub_match);
             let user: User = UserFactory::with_config(user_config)
                 .build_with_client(&client)
@@ -134,9 +139,12 @@ async fn main() {
             printer.print_user(&user_with_log);
 
             let exporter = Exporter::new(global_config.clone());
-            exporter.export_user(&user_with_log)
+            exporter.export_user(&user_with_log);
+            println!("Done in {:?}", time.elapsed());
         }
         Some(("org", sub_match)) => {
+            let time = Instant::now();
+
             let org_config = OrgCommandHandler::config(sub_match);
             let org: Org = OrgFactory::with_config(org_config)
                 .build_with_client(&client)
@@ -148,7 +156,8 @@ async fn main() {
             printer.print_org(&org_with_log);
 
             let exporter = Exporter::new(global_config.clone());
-            exporter.export_org(&org_with_log)
+            exporter.export_org(&org_with_log);
+            println!("Done in {:?}", time.elapsed());
         }
         _ => {}
     }
