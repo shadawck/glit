@@ -6,7 +6,10 @@
 
 **README Sections:**  [Use](#use) — [Installation](#installation)
 
+<img src="./img/demo_dec.gif">
+<br></br>
 </div>
+
 
 # Use
 
@@ -56,7 +59,6 @@ glit org -a -u https://github.com/netflix
 
 - -a , --all-branches : Search in all branches
 - -o , --output : Write output as **JSON**
-
 
 # Installation
 
