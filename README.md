@@ -80,3 +80,4 @@ mv glit /usr/local/bin/
 ## ROADMAP
 
 - [] Change git2 for Gitoxde via the [git_repository](https://docs.rs/git-repository/latest/git_repository/) crate.
+  - Use rustls
