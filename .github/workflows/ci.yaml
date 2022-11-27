@@ -39,15 +39,15 @@ jobs:
           command: clippy
           args: --locked --all-targets  -- -D warnings # --all-features --workspace
 
-  test_code_coverage:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-      - name: Run llvm-cov and upload to codecov
-        uses: ./.github/actions/cargo-llvm-cov
-        with:
-          codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  #test_code_coverage:
+  #  runs-on: ubuntu-latest
+  #
+  #  steps:
+  #    - uses: actions/checkout@v3
+  #    - name: Run llvm-cov and upload to codecov
+  #      uses: ./.github/actions/cargo-llvm-cov
+  #      with:
+  #        codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
   check:
     runs-on: ubuntu-latest

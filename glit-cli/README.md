@@ -44,7 +44,7 @@ glit repo -u https://github.com/rust-lang/git2-rs
 Fetch emails of all user/committer from all repositories of a user.
 
 ```bash
-glit user -u https://github.com/rust
+glit user -u https://github.com/sindresorhus
 ```
 
 #### **Organization**
@@ -52,13 +52,22 @@ glit user -u https://github.com/rust
 Fetch emails of all user/committer from all repositories of an organization.
 
 ```bash
-glit org -a -u https://github.com/netflix
+glit org -u https://github.com/twitter
 ```
 
 ## Other options
 
-- -a , --all-branches : Search in all branches
-- -o , --output : Write output as **JSON**
+- -a , --all-branches : Search mails in all branches.
+
+```bash
+glit org -au https://github.com/twitter
+```
+
+- -o , --output : Write output as **JSON**.
+
+```bash
+glit -o ~/twitter.json org -au https://github.com/twitter
+```
 
 # Installation
 

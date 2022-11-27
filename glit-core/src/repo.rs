@@ -118,7 +118,7 @@ impl RepositoryFactory {
             let mut state = state.borrow_mut();
 
             state.progress = Some(stats.to_owned());
-            print(&mut *state);
+            print(&mut state);
             true
         });
 
@@ -128,7 +128,7 @@ impl RepositoryFactory {
             state.path = path.map(|p| p.to_path_buf());
             state.current = cur;
             state.total = total;
-            print(&mut *state);
+            print(&mut state);
         });
 
         let mut fo = FetchOptions::new();
@@ -171,7 +171,7 @@ impl RepositoryFactory {
                     let mut state = state.borrow_mut();
 
                     state.progress = Some(stats.to_owned());
-                    print(&mut *state);
+                    print(&mut state);
                     true
                 });
 
@@ -181,7 +181,7 @@ impl RepositoryFactory {
                     state.path = path.map(|p| p.to_path_buf());
                     state.current = cur;
                     state.total = total;
-                    print(&mut *state);
+                    print(&mut state);
                 });
 
                 let mut fo = FetchOptions::new();
@@ -268,7 +268,7 @@ impl Repository {
                 println!("Build log Time : {:?}", t1.elapsed());
 
                 let remove_path = pt.parent().unwrap();
-                let removal = remove_dir_all(&remove_path);
+                let removal = remove_dir_all(remove_path);
                 match removal {
                     Ok(_) => info!("Cleaning - Delete folder at {:?}", &remove_path),
                     Err(_) => error!("Failed to delete at {:?}", &remove_path),
