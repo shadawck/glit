@@ -3,7 +3,7 @@ use ahash::RandomState;
 use async_trait::async_trait;
 use crossbeam_channel::bounded;
 use dashmap::DashMap;
-use futures::future::join_all;
+use futures_util::future::join_all;
 use rayon::ThreadPoolBuilder;
 use repo::Repository;
 use reqwest::{Client, Url};
