@@ -1,7 +1,7 @@
 use crate::{config::RepositoryConfig, repo::RepositoryFactory};
 use ahash::RandomState;
 use async_trait::async_trait;
-use crossbeam::channel::bounded;
+use crossbeam_channel::bounded;
 use dashmap::DashMap;
 use futures::future::join_all;
 use rayon::ThreadPoolBuilder;
