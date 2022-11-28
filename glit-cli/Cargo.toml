@@ -11,6 +11,9 @@ license = "MIT OR Apache-2.0"
 keywords = ["osint", "security", "mail", "git"]
 categories = ["command-line-utilities", "email"]
 
+[[bin]]
+name = "glit"
+
 [dependencies]
 reqwest = { version = "0.11.12", default-features = false, features = [
     "json",
