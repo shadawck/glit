@@ -17,7 +17,7 @@ reqwest = { version = "0.11.12", default-features = false, features = [
     "rustls-tls",
 ] }
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
-glit-core = { version = "0.1.0", path = "../glit-core" }
+glit-core = "0.1.0"
 clap = { version = "4.0.12", features = ["cargo"] }
 colored = "2.0.0"
 serde_json = "1.0.87"
