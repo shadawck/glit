@@ -6,7 +6,7 @@
 
 **README Sections:**  [Use](#use) — [Installation](#installation)
 
-<img src="./img/demo_dec.gif">
+<img src="./img/demo.gif">
 <br></br>
 </div>
 
