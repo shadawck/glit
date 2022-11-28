@@ -6,7 +6,6 @@
 
 **README Sections:**  [Use](#use) — [Installation](#installation)
 
-<img src="./img/demo_dec.gif">
 <br></br>
 </div>
 
@@ -44,7 +43,7 @@ glit repo -u https://github.com/rust-lang/git2-rs
 Fetch emails of all user/committer from all repositories of a user.
 
 ```bash
-glit user -u https://github.com/sindresorhus
+glit user -u https://github.com/rust
 ```
 
 #### **Organization**
@@ -52,22 +51,13 @@ glit user -u https://github.com/sindresorhus
 Fetch emails of all user/committer from all repositories of an organization.
 
 ```bash
-glit org -u https://github.com/twitter
+glit org -a -u https://github.com/netflix
 ```
 
 ## Other options
 
-- -a , --all-branches : Search mails in all branches.
-
-```bash
-glit org -au https://github.com/twitter
-```
-
-- -o , --output : Write output as **JSON**.
-
-```bash
-glit -o ~/twitter.json org -au https://github.com/twitter
-```
+- -a , --all-branches : Search in all branches
+- -o , --output : Write output as **JSON**
 
 # Installation
 
@@ -85,3 +75,8 @@ cargo install glit
 tar -xvf glit-x86_64-unknown-linux-gnu-v0.2.0.tgz
 mv glit /usr/local/bin/
 ```
+
+## ROADMAP
+
+- [ ] Change git2 for Gitoxide via the [git_repository](https://docs.rs/git-repository/latest/git_repository/) crate.
+  - Use rustls-tls

@@ -419,7 +419,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "colored",
- "glit-core",
+ "glit-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest",
  "serde_json",
  "tokio",
@@ -430,6 +430,29 @@ dependencies = [
 [[package]]
 name = "glit-core"
 version = "0.1.0"
+dependencies = [
+ "ahash",
+ "async-trait",
+ "colored",
+ "crossbeam-channel",
+ "dashmap",
+ "futures-util",
+ "git2",
+ "rand 0.8.5",
+ "rayon",
+ "reqwest",
+ "scraper",
+ "serde",
+ "tokio",
+ "tracing",
+ "url_serde",
+]
+
+[[package]]
+name = "glit-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ff6c0963d1437bdb9bbec4f12c9a19fe622d6cd6860f020ea38e192d320fbba"
 dependencies = [
  "ahash",
  "async-trait",
