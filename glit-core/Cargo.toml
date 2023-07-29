@@ -12,21 +12,21 @@ keywords = ["osint", "security", "mail", "git"]
 categories = ["command-line-utilities", "email"]
 
 [dependencies]
-reqwest = { version = "0.11.12", default-features = false, features = [
+reqwest = { version = "0.11.18", default-features = false, features = [
     "json",
     "rustls-tls",
 ] }
-tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
-futures-util = "0.3.24"
-scraper = "0.13.0"
-git2 = "0.15.0"
+tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
+futures-util = "0.3.28"
+scraper = "0.17.1"
+git2 = "0.17.2"
 rand = "0.8.5"
-ahash = "0.8.2"
-serde = { version = "1.0.147", default-features = false, features = ["derive"] }
-colored = "2.0.0"
-rayon = "1.5.3"
-dashmap = { version = "5.4.0", default-features = false, features = ["serde"] }
-url_serde = "0.2.0"
-async-trait = "0.1.58"
+ahash = "0.8.3"
+serde = { version = "1.0.178", default-features = false, features = ["derive"] }
+rayon = "1.7.0"
+dashmap = { version = "5.5.0", default-features = false, features = ["serde"] }
+async-trait = "0.1.72"
 tracing = "0.1.37"
-crossbeam-channel = "0.5.6"
+crossbeam-channel = "0.5.8"
+log = "0.4.19"
+indicatif = { version = "0.17.5", features = ["rayon"] }

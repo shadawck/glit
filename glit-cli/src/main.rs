@@ -8,6 +8,7 @@ pub mod utils;
 use std::time::Instant;
 
 use clap::{crate_version, Arg, Command};
+use colored::Colorize;
 use exporter::Exporter;
 use glit_core::{
     org::{Org, OrgFactory},
@@ -15,13 +16,14 @@ use glit_core::{
     user::{User, UserFactory},
     Logger,
 };
+
 use global_option_handler::GlobalOptionHandler;
+use log::LevelFilter;
 use org_command_handler::OrgCommandHandler;
 use printer::Printer;
 use repository_command_handler::RepoCommandHandler;
 use reqwest::ClientBuilder;
-use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
+
 use user_command_handler::UserCommandHandler;
 
 #[tokio::main]
@@ -30,13 +32,12 @@ async fn main() {
         .version(crate_version!())
         .author("Shadawck <shadawck@protonmail.com>")
         .about("Osint tool - Extract mail from repository/user/organization by crawling commit metadata.")
-
         .arg(
             Arg::new("verbose")
                 .short('v')
-                .long("verbose")
+                .action(clap::ArgAction::Count)
                 .help("Add information on commit hash, username ...")
-                .num_args(0),
+                .global(true)
         )
         .arg(
             Arg::new("output")
@@ -44,7 +45,8 @@ async fn main() {
                 .short('o')
                 .long("output")
                 .help("export data to json")
-                .num_args(1),
+                .num_args(1)
+                .global(true),
         )
         .subcommand(
             Command::new("repo")
@@ -105,11 +107,22 @@ async fn main() {
     let client = ClientBuilder::new().build().unwrap();
     let global_config = GlobalOptionHandler::config(&matches);
 
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
-        .finish();
+    let verbose = matches.get_count("verbose").to_owned();
 
-    tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
+    let level = match verbose {
+        0 => LevelFilter::Off,
+        1 => LevelFilter::Error,
+        2 => LevelFilter::Warn,
+        3 => LevelFilter::Info,
+        _ => LevelFilter::Debug,
+    };
+
+    env_logger::builder().filter_level(level).init();
+    log::info!(
+        "Brought to you by {} - {}",
+        "@shadawck".bright_purple(),
+        "https://github.com/shadawck".bright_cyan()
+    );
 
     match matches.subcommand() {
         Some(("repo", sub_match)) => {
@@ -119,12 +132,13 @@ async fn main() {
 
             let repo_extraction = repository.extract_log();
 
-            let printer = Printer::new(global_config.clone());
-            printer.print_repo(&repo_extraction);
+            //let printer = Printer::<Repository>::new(global_config.clone());
+            //printer.print_repo(&repo_extraction);
 
             let exporter = Exporter::new(global_config);
             exporter.export_repo(&repo_extraction);
-            println!("Done in {:?}", time.elapsed());
+
+            log::info!("Done in {:?}", time.elapsed());
         }
         Some(("user", sub_match)) => {
             let time = Instant::now();
@@ -135,12 +149,13 @@ async fn main() {
 
             let user_with_log = Logger::log_for(user, &client).await;
 
-            let printer = Printer::new(global_config.clone());
-            printer.print_user(&user_with_log);
+            //let printer = Printer::new(global_config.clone());
+            //printer.print_user(&user_with_log);
 
             let exporter = Exporter::new(global_config.clone());
             exporter.export_user(&user_with_log);
-            println!("Done in {:?}", time.elapsed());
+
+            log::info!("Done in {:?}", time.elapsed());
         }
         Some(("org", sub_match)) => {
             let time = Instant::now();
@@ -152,12 +167,13 @@ async fn main() {
 
             let org_with_log = Logger::log_for(org, &client).await;
 
-            let printer = Printer::new(global_config.clone());
-            printer.print_org(&org_with_log);
+            //let printer = Printer::new(global_config.clone());
+            //printer.print_org(&org_with_log);
 
             let exporter = Exporter::new(global_config.clone());
             exporter.export_org(&org_with_log);
-            println!("Done in {:?}", time.elapsed());
+
+            log::info!("Done in {:?}", time.elapsed());
         }
         _ => {}
     }

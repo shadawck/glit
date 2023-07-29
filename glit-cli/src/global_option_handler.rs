@@ -5,9 +5,9 @@ pub struct GlobalOptionHandler();
 
 impl GlobalOptionHandler {
     pub fn config(matches: &ArgMatches) -> GlobalConfig {
-        let verbose = matches
-            .get_one::<bool>("verbose")
-            .unwrap_or(&false)
+        let thread_num = matches
+            .get_one::<usize>("thread")
+            .unwrap_or(&(8 as usize))
             .to_owned();
 
         let output = matches
@@ -15,6 +15,6 @@ impl GlobalOptionHandler {
             .unwrap_or(&"".to_string())
             .to_owned();
 
-        GlobalConfig { verbose, output }
+        GlobalConfig { output, thread_num }
     }
 }

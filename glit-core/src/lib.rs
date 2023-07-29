@@ -15,7 +15,7 @@ use std::{
     },
     time::Instant,
 };
-use tracing::{error, info};
+use tracing::error;
 use types::RepoName;
 
 pub mod config;
@@ -86,7 +86,7 @@ pub trait ExtractLog {
                         let repo_url = format!("{}{}/", url, repo_name);
                         let sending = tx_url.send(Url::parse(&repo_url).unwrap());
                         match sending {
-                            Ok(_) => info!("Send url {}", repo_url),
+                            Ok(_) => tracing::debug!("Send url {}", repo_url),
                             Err(e) => {
                                 error!("Failed to send {} with : [{:?}]", repo_url, e)
                             }
@@ -119,7 +119,8 @@ pub trait ExtractLog {
         drop(tx);
         drop(rx_url);
 
-        let current_num_thread = rayon::current_num_threads();
+        tracing::info!("Number of threads : {}", rayon::current_num_threads());
+        let current_num_thread = rayon::current_num_threads() - 2;
         let pool = ThreadPoolBuilder::new()
             .num_threads(current_num_thread)
             .build()
@@ -131,34 +132,35 @@ pub trait ExtractLog {
 
         let atomic_count = Arc::new(AtomicUsize::new(0));
 
-        let dash_result = pool.scope(move |scope| {
-            for _ in 0..repo_count {
-                let dash = dash.clone();
-                let rx = rx.clone();
-                let atomic_count = atomic_count.clone();
+        let dash_result: Arc<DashMap<RepoName, Repository, RandomState>> =
+            pool.scope(move |scope| {
+                for _ in 0..repo_count {
+                    let dash = dash.clone();
+                    let rx = rx.clone();
+                    let atomic_count = atomic_count.clone();
 
-                scope.spawn(move |_| {
-                    let repo = rx.recv().unwrap();
-                    drop(rx);
+                    scope.spawn(move |_| {
+                        let repo = rx.recv().unwrap();
+                        drop(rx);
 
-                    let data = repo.clone().extract_log();
-                    let repo_name_key = RepoName(repo.name);
-                    dash.insert(repo_name_key, data);
-                    atomic_count.fetch_add(1, Ordering::Relaxed);
-                    info!(
-                        "Repository handled : {}/{}",
-                        atomic_count.load(Ordering::Relaxed),
-                        repo_count
-                    );
-                })
-            }
-            dash
-        });
+                        let data = repo.clone().extract_log();
+                        let repo_name_key = RepoName(repo.name);
+                        dash.insert(repo_name_key, data);
+                        atomic_count.fetch_add(1, Ordering::Relaxed);
+                        println!(
+                            "Repository handled : {}/{}",
+                            atomic_count.load(Ordering::Relaxed),
+                            repo_count
+                        );
+                    })
+                }
+                dash
+            });
         drop(pool);
 
         join_all(tokio_handles).await;
 
-        info!(
+        tracing::info!(
             "Fetching and Cloning handled in {:?} for {}",
             start_a.elapsed(),
             repo_count

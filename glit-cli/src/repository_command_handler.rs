@@ -20,8 +20,6 @@ impl RepoCommandHandler {
 
         let repository_url = fix_input_url(repo_url);
 
-        // Fail fast -> Check repository and branch existence
-
         RepositoryConfig {
             url: Url::parse(&repository_url).unwrap(),
             all_branches,

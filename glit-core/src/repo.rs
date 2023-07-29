@@ -4,26 +4,21 @@ use crate::{
     types::{AuthorName, BranchName},
 };
 use ahash::{HashMap, HashMapExt};
-use git2::{
-    build::{CheckoutBuilder, RepoBuilder},
-    BranchType, Oid,
-};
+use git2::{build::RepoBuilder, BranchType, Oid};
+use git2::{FetchOptions, RemoteCallbacks};
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rand::distributions::{Alphanumeric, DistString};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
     collections::BTreeMap,
     fs::remove_dir_all,
-    io::{self, Write},
     path::{Path, PathBuf},
     str::FromStr,
+    sync::{Arc, Mutex, MutexGuard},
     time::Instant,
 };
-use tracing::{error, info};
-
-use git2::{FetchOptions, Progress, RemoteCallbacks};
 
 const DEFAULT_PATH: &str = "/tmp";
 
@@ -35,14 +30,6 @@ pub struct Repository {
     #[serde(skip)]
     clone_paths: Vec<PathBuf>,
     pub branch_data: HashMap<BranchName, Committers>,
-}
-
-struct State {
-    progress: Option<Progress<'static>>,
-    total: usize,
-    current: usize,
-    path: Option<PathBuf>,
-    newline: bool,
 }
 
 pub struct RepositoryFactory {
@@ -82,7 +69,6 @@ impl RepositoryFactory {
         let mut branches = repository
             .branches(Some(BranchType::Remote))
             .unwrap()
-            .into_iter()
             .map(|b| {
                 let branch = b.unwrap().0;
                 let branch_name = branch.name().unwrap().unwrap();
@@ -104,49 +90,35 @@ impl RepositoryFactory {
             .collect::<Vec<_>>()
     }
 
-    fn clone(url: &Url, path: &Path) -> Result<git2::Repository, git2::Error> {
-        let state = RefCell::new(State {
-            progress: None,
-            total: 0,
-            current: 0,
-            path: None,
-            newline: false,
-        });
-
-        let mut cb = RemoteCallbacks::new();
-        cb.transfer_progress(|stats| {
-            let mut state = state.borrow_mut();
-
-            state.progress = Some(stats.to_owned());
-            print(&mut state);
-            true
-        });
-
-        let mut co = CheckoutBuilder::new();
-        co.progress(|path, cur, total| {
-            let mut state = state.borrow_mut();
-            state.path = path.map(|p| p.to_path_buf());
-            state.current = cur;
-            state.total = total;
-            print(&mut state);
-        });
-
+    fn clone(url: &Url, repo_name: String, path: &Path) -> Result<git2::Repository, git2::Error> {
+        let cb = create_callback(repo_name, "default".to_string());
         let mut fo = FetchOptions::new();
         fo.remote_callbacks(cb);
 
         let repo = RepoBuilder::new()
             .bare(true)
             .fetch_options(fo)
-            .with_checkout(co)
             .clone(url.as_str(), path);
+
+        match repo {
+            Ok(_) => log::debug!("Cloning repo at {:?}", path.to_str().unwrap()),
+            Err(_) => {
+                log::error!("Failed to clone")
+            }
+        }
+
         repo
     }
 
     fn clone_branches(url: Url, repo_name: String, branches: Vec<BranchName>) -> Vec<PathBuf> {
         let repo_name = repo_name.replace('-', "_");
+        let mpb = Arc::new(Mutex::new(MultiProgress::new()));
+
         branches
             .par_iter()
             .map(|branch| {
+                let mpb = mpb.clone();
+
                 let hash_suffix = Alphanumeric.sample_string(&mut rand::thread_rng(), 6);
                 let hashed_repo_name = format!("{}_{}", repo_name, hash_suffix);
 
@@ -158,31 +130,9 @@ impl RepositoryFactory {
                 );
 
                 let branch_clone_path = PathBuf::from_str(&path).unwrap();
-                let state = RefCell::new(State {
-                    progress: None,
-                    total: 0,
-                    current: 0,
-                    path: None,
-                    newline: false,
-                });
 
-                let mut cb = RemoteCallbacks::new();
-                cb.transfer_progress(|stats| {
-                    let mut state = state.borrow_mut();
-
-                    state.progress = Some(stats.to_owned());
-                    print(&mut state);
-                    true
-                });
-
-                let mut co = CheckoutBuilder::new();
-                co.progress(|path, cur, total| {
-                    let mut state = state.borrow_mut();
-                    state.path = path.map(|p| p.to_path_buf());
-                    state.current = cur;
-                    state.total = total;
-                    print(&mut state);
-                });
+                let locked_mpb = mpb.lock().unwrap();
+                let cb = create_multi_callback(repo_name.clone(), branch.to_string(), locked_mpb);
 
                 let mut fo = FetchOptions::new();
                 fo.remote_callbacks(cb);
@@ -190,16 +140,19 @@ impl RepositoryFactory {
                 let repo = RepoBuilder::new()
                     .bare(true)
                     .fetch_options(fo)
-                    .with_checkout(co)
                     .branch(&branch.to_string())
                     .clone(url.clone().as_str(), &branch_clone_path);
 
                 match repo {
-                    Ok(_) => info!(
+                    Ok(_) => log::debug!(
                         "[{:?}] Cloning branch : {:?} at {}",
-                        repo_name, branch, path
+                        repo_name,
+                        branch,
+                        path
                     ),
-                    Err(_) => info!("Failed to clone {} with branch {:?}", repo_name, branch),
+                    Err(_) => {
+                        log::error!("Failed to clone {} with branch {:?}", repo_name, branch)
+                    }
                 }
 
                 branch_clone_path
@@ -222,7 +175,8 @@ impl RepositoryFactory {
         .unwrap();
 
         let mut clone_paths: Vec<PathBuf> = Vec::new();
-        let repo: git2::Repository = Self::clone(&self.url, clone_location.as_path()).unwrap();
+        let repo: git2::Repository =
+            Self::clone(&self.url, repo_name.clone(), clone_location.as_path()).unwrap();
         let head = Self::get_head_branch(&repo);
         if !head.is_empty() {
             clone_paths.push(clone_location);
@@ -231,8 +185,6 @@ impl RepositoryFactory {
         // Clone all branches
         if self.all_branches {
             let mut branches = Self::fetch_branches(&repo, &head);
-            //let prepared_branch = Self::prepare_branch(branches.clone());
-
             let paths = Self::clone_branches(self.url.clone(), repo_name.clone(), branches.clone());
 
             branches.push(BranchName(head));
@@ -264,14 +216,17 @@ impl Repository {
             .zip(self.clone_paths.clone())
             .map(|(br, pt)| {
                 let t1 = Instant::now();
-                let repo_data = Log::build(pt.clone());
-                println!("Build log Time : {:?}", t1.elapsed());
+
+                let repo_data: Committers =
+                    Log::build(pt.clone(), self.name.clone(), br.to_string());
+
+                log::info!("Build log Time : {:?}", t1.elapsed());
 
                 let remove_path = pt.parent().unwrap();
                 let removal = remove_dir_all(remove_path);
                 match removal {
-                    Ok(_) => info!("Cleaning - Delete folder at {:?}", &remove_path),
-                    Err(_) => error!("Failed to delete at {:?}", &remove_path),
+                    Ok(_) => log::debug!("Cleaning - Delete folder at {:?}", &remove_path),
+                    Err(_) => log::error!("Failed to delete at {:?}", &remove_path),
                 }
 
                 (br, repo_data)
@@ -319,6 +274,8 @@ impl Committers {
     }
 
     pub fn update(&mut self, repo: &git2::Repository, commit_id: Oid) -> &Self {
+        log::debug!("Looking in commit {}", commit_id);
+
         let commit = repo.find_commit(commit_id).unwrap();
         let commit_sigature = commit.author();
         let author: AuthorName = AuthorName(commit_sigature.name().unwrap_or("").to_string());
@@ -371,46 +328,179 @@ impl Committers {
     }
 }
 
-fn print(state: &mut State) {
-    let stats = state.progress.as_ref().unwrap();
-    let network_pct = (100 * stats.received_objects()) / stats.total_objects();
-    let index_pct = (100 * stats.indexed_objects()) / stats.total_objects();
-    let co_pct = if state.total > 0 {
-        (100 * state.current) / state.total
-    } else {
-        0
-    };
-    let kbytes = stats.received_bytes() / 1024;
-    if stats.received_objects() == stats.total_objects() {
-        if !state.newline {
-            println!();
-            state.newline = true;
+fn create_multi_callback(
+    repo_name: String,
+    branch_name: String,
+    mpb: MutexGuard<'_, MultiProgress>,
+) -> RemoteCallbacks<'static> {
+    let mut cb = RemoteCallbacks::new();
+    let pb_clone: ProgressBar = ProgressBar::new(0);
+    let pb_delta: ProgressBar = ProgressBar::new(0);
+
+    mpb.add(pb_clone.to_owned());
+    //mpb.add(pb_delta.to_owned());
+    mpb.insert_after(&pb_clone, pb_delta.to_owned());
+
+    let style_clone = ProgressStyle::with_template(
+        "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+    )
+    .unwrap()
+    .progress_chars("#>-");
+
+    let style_delta = ProgressStyle::with_template(
+        "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+    )
+    .unwrap()
+    .progress_chars("#>-");
+
+    pb_clone.set_style(style_clone);
+    pb_delta.set_style(style_delta);
+
+    let mut is_clone_finished = false;
+    let mut is_delta_finished = false;
+    let mut delta_length_is_set = false;
+
+    cb.transfer_progress(move |stats| {
+        if stats.received_objects() == 0 {
+            pb_clone.set_message(format!("[{}][{}]", repo_name, branch_name));
+            pb_clone.set_length(stats.total_objects().try_into().unwrap());
         }
-        print!(
-            "Resolving deltas {}/{}\r",
-            stats.indexed_deltas(),
-            stats.total_deltas()
-        );
-    } else {
-        print!(
-            "net {:3}% ({:4} kb, {:5}/{:5})  /  idx {:3}% ({:5}/{:5})  \
-             /  chk {:3}% ({:4}/{:4}) {}\r",
-            network_pct,
-            kbytes,
-            stats.received_objects(),
-            stats.total_objects(),
-            index_pct,
-            stats.indexed_objects(),
-            stats.total_objects(),
-            co_pct,
-            state.current,
-            state.total,
-            state
-                .path
-                .as_ref()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default()
-        )
-    }
-    io::stdout().flush().unwrap();
+
+        if stats.indexed_deltas() > 0 && !delta_length_is_set {
+            pb_delta.set_message(format!("[{}][{}]", repo_name, branch_name));
+            pb_delta.set_length(stats.total_deltas().try_into().unwrap());
+            delta_length_is_set = true;
+        }
+
+        if (stats.received_objects() <= stats.total_objects()) && !is_clone_finished {
+            pb_clone.set_position(stats.received_objects().try_into().unwrap());
+            pb_clone.tick();
+            if stats.received_objects() == stats.total_objects() {
+                pb_clone.finish_with_message(format!(
+                    "[{} ✅][{} ✅]",
+                    repo_name.clone(),
+                    branch_name.clone()
+                ));
+                pb_clone.finish_and_clear();
+                is_clone_finished = true;
+            }
+        }
+
+        if (stats.indexed_deltas() <= stats.total_deltas())
+            && stats.total_deltas() > 0
+            && is_clone_finished
+            && !is_delta_finished
+        {
+            pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
+
+            if stats.indexed_deltas() == stats.total_deltas() {
+                pb_delta.finish_with_message(format!(
+                    "[{} ✅][{} ✅]",
+                    repo_name.clone(),
+                    branch_name.clone()
+                ));
+                pb_delta.finish_and_clear();
+                is_delta_finished = true;
+            }
+        }
+
+        true
+    });
+
+    cb
 }
+
+fn create_callback(repo_name: String, branch_name: String) -> RemoteCallbacks<'static> {
+    let mut cb = RemoteCallbacks::new();
+
+    let pb_clone: Arc<ProgressBar> = Arc::new(ProgressBar::new(0));
+    let pb_delta: Arc<ProgressBar> = Arc::new(ProgressBar::hidden());
+
+    let style_clone = ProgressStyle::with_template(
+        "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+    )
+    .unwrap()
+    .progress_chars("#>-");
+
+    let style_delta = ProgressStyle::with_template(
+        "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+    )
+    .unwrap()
+    .progress_chars("#>-");
+
+    pb_clone.set_style(style_clone);
+    pb_delta.set_style(style_delta);
+
+    let mut is_clone_finished = false;
+    let mut is_delta_finished = false;
+    let mut delta_length_is_set = false;
+
+    cb.transfer_progress(move |stats| {
+        if stats.received_objects() == 0 {
+            pb_clone.set_message(format!("[{}][{}]", repo_name.clone(), branch_name.clone()));
+            pb_clone.set_length(stats.total_objects().try_into().unwrap());
+        }
+
+        if stats.indexed_deltas() > 0 && !delta_length_is_set {
+            pb_delta.set_message(format!("[{}][{}]", repo_name.clone(), branch_name.clone()));
+            pb_delta.set_length(stats.total_deltas().try_into().unwrap());
+            delta_length_is_set = true;
+        }
+
+        if (stats.received_objects() <= stats.total_objects()) && !is_clone_finished {
+            pb_clone.set_position(stats.received_objects().try_into().unwrap());
+            pb_clone.tick();
+            if stats.received_objects() == stats.total_objects() {
+                pb_clone.finish_with_message(format!(
+                    "[{} ✅][{} ✅]",
+                    repo_name.clone(),
+                    branch_name.clone()
+                ));
+                pb_clone.finish_and_clear();
+                is_clone_finished = true;
+
+                // make hidden delta bar appear
+                pb_delta.set_draw_target(ProgressDrawTarget::stdout());
+            }
+        }
+
+        if (stats.indexed_deltas() <= stats.total_deltas())
+            && stats.total_deltas() > 0
+            && is_clone_finished
+            && !is_delta_finished
+        {
+            pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
+
+            if stats.indexed_deltas() == stats.total_deltas() {
+                pb_delta.finish_with_message(format!(
+                    "[{} ✅][{} ✅]",
+                    repo_name.clone(),
+                    branch_name.clone()
+                ));
+                pb_delta.finish_and_clear();
+                is_delta_finished = true;
+            }
+        }
+
+        true
+    });
+
+    cb
+}
+
+//fn print(state: &mut State, pb_clone: &mut ProgressBar, pb_delta: &mut ProgressBar) {
+//    let stats = state.progress.as_ref().unwrap();
+//    let network_pct = (100 * stats.received_objects()) / stats.total_objects();
+//    let index_pct = (100 * stats.indexed_objects()) / stats.total_objects();
+//    let kbytes = stats.received_bytes() / 1024;
+//
+//    if stats.indexed_deltas() < stats.total_deltas() {
+//        pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
+//        //io::stdout().flush().unwrap();
+//    }
+//
+//    if stats.received_objects() < stats.total_objects() {
+//        pb_clone.set_position(stats.received_objects().try_into().unwrap());
+//        //io::stdout().flush().unwrap();
+//    }
+//}

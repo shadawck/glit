@@ -65,7 +65,7 @@ glit org -a -u https://github.com/netflix
 ### With cargo
 
 ```bash
-cargo install glit
+cargo install glit-cli
 ```
 
 ### From Github Release

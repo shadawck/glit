@@ -2,8 +2,8 @@ use reqwest::Url;
 
 #[derive(Debug, Clone)]
 pub struct GlobalConfig {
+    pub thread_num: usize,
     pub output: String,
-    pub verbose: bool,
 }
 
 #[derive(Debug, Clone)]

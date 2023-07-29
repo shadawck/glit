@@ -18,20 +18,14 @@ impl<T> Printer<T> {
 
 impl Printer<Repository> {
     pub fn print_repo(&self, data: &Repository) {
-        if self.global_config.verbose {
-        } else {
-            for (branch, value) in &data.branch_data {
-                let branch_format = format!("[ Branch : {} ]", branch.to_string()).yellow();
-                println!("{}", branch_format);
-                for (author, data) in &value.committers {
-                    let mails = data.mails.keys().cloned().collect::<Vec<String>>();
-                    print!("{}:", author.to_string().trim().blue());
+        for (branch, value) in &data.branch_data {
+            let branch_format = format!("[ Branch : {} ]", branch.to_string()).yellow();
+            println!("{}", branch_format);
+            for (author, data) in &value.committers {
+                let mails = data.mails.keys().cloned().collect::<Vec<String>>();
+                println!("{}:", author.to_string().trim().blue());
 
-                    print_mail(mails, author.to_string().trim());
-
-                    println!();
-                }
-                println!();
+                print_mail(mails, author.to_string().trim());
             }
         }
     }
@@ -60,19 +54,19 @@ impl Printer<Org> {
 
 fn print_mail(mails: Vec<String>, author: &str) {
     if mails.len() == 1 {
-        let mail = mails.first().unwrap().trim();
+        let mail: &str = mails.first().unwrap().trim();
         let fmail = format_mail(mail);
-        print!(" {}", fmail)
+        println!(" {}", fmail)
     } else {
         let author_string_len = author.len() + 2;
         let padding = " ".repeat(author_string_len);
         let mail = mails.first().unwrap().trim();
-        let fmail = format_mail(mail);
+        let fmail: String = format_mail(mail);
 
         println!(" {}", fmail);
         for mail in mails[1..].iter() {
             let fmail = format_mail(mail.trim());
-            print!("{}{}", padding, fmail);
+            println!("{}{}", padding, fmail);
         }
     }
 }
