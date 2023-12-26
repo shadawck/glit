@@ -1,5 +1,10 @@
 [workspace]
 members = ["glit-core", "glit-cli"]
+resolver = "2"
+
+[profile.dev]
+opt-level = 0
+incremental = true
 
 [profile.release]
 lto = true

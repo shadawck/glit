@@ -6,7 +6,9 @@ use crate::{
 use ahash::{HashMap, HashMapExt};
 use git2::{build::RepoBuilder, BranchType, Oid};
 use git2::{FetchOptions, RemoteCallbacks};
-use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+
 use rand::distributions::{Alphanumeric, DistString};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use reqwest::Url;
@@ -16,9 +18,10 @@ use std::{
     fs::remove_dir_all,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex},
     time::Instant,
 };
+
 
 const DEFAULT_PATH: &str = "/tmp";
 
@@ -36,6 +39,7 @@ pub struct RepositoryFactory {
     all_branches: bool,
     branches: Vec<BranchName>,
     url: Url,
+    //mpb: Arc<Mutex<MultiProgress>>,
 }
 
 impl RepositoryFactory {
@@ -43,10 +47,13 @@ impl RepositoryFactory {
         let url = repository_config.url;
         let all_branches: bool = repository_config.all_branches;
 
+        //let mpb = Arc::new(Mutex::new(MultiProgress::new()));
+
         RepositoryFactory {
             all_branches,
             url,
             branches: Vec::<BranchName>::new(),
+            //mpb,
         }
     }
 
@@ -90,8 +97,33 @@ impl RepositoryFactory {
             .collect::<Vec<_>>()
     }
 
-    fn clone(url: &Url, repo_name: String, path: &Path) -> Result<git2::Repository, git2::Error> {
-        let cb = create_callback(repo_name, "default".to_string());
+    fn clone(
+        url: &Url,
+        repo_name: String,
+        path: &Path,
+        //mpb: Arc<Mutex<MultiProgress>>,
+    ) -> Result<git2::Repository, git2::Error> {
+        let pb_clone= ProgressBar::new(0);
+        let pb_delta= ProgressBar::new(0);
+
+        //mpb.lock().unwrap().add(pb_clone.clone());
+
+        //let style_clone = ProgressStyle::with_template(
+        //    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+        //)
+        //.unwrap()
+        //.progress_chars("#>-");
+        //
+        //let style_delta = ProgressStyle::with_template(
+        //    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+        //)
+        //.unwrap()
+        //.progress_chars("#>-");
+        //
+        //pb_clone.set_style(style_clone);
+        //pb_delta.set_style(style_delta);
+        let cb = create_multi_callback(repo_name, "default".to_string(), pb_clone, pb_delta); //, mpb
+
         let mut fo = FetchOptions::new();
         fo.remote_callbacks(cb);
 
@@ -110,15 +142,17 @@ impl RepositoryFactory {
         repo
     }
 
-    fn clone_branches(url: Url, repo_name: String, branches: Vec<BranchName>) -> Vec<PathBuf> {
+    fn clone_branches(
+        url: Url,
+        repo_name: String,
+        branches: Vec<BranchName>,
+        //mpb: Arc<Mutex<MultiProgress>>,
+    ) -> Vec<PathBuf> {
         let repo_name = repo_name.replace('-', "_");
-        let mpb = Arc::new(Mutex::new(MultiProgress::new()));
 
         branches
             .par_iter()
             .map(|branch| {
-                let mpb = mpb.clone();
-
                 let hash_suffix = Alphanumeric.sample_string(&mut rand::thread_rng(), 6);
                 let hashed_repo_name = format!("{}_{}", repo_name, hash_suffix);
 
@@ -131,8 +165,25 @@ impl RepositoryFactory {
 
                 let branch_clone_path = PathBuf::from_str(&path).unwrap();
 
-                let locked_mpb = mpb.lock().unwrap();
-                let cb = create_multi_callback(repo_name.clone(), branch.to_string(), locked_mpb);
+                let pb_clone  = ProgressBar::new(0);
+                let pb_delta =  ProgressBar::new(0);
+        
+                let style_clone = ProgressStyle::with_template(
+                    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+                )
+                .unwrap()
+                .progress_chars("#>-");
+        
+                let style_delta = ProgressStyle::with_template(
+                    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+                )
+                .unwrap()
+                .progress_chars("#>-");
+        
+                pb_clone.set_style(style_clone);
+                pb_delta.set_style(style_delta);
+                let cb = create_multi_callback(repo_name.clone(), branch.to_string(), pb_clone, pb_delta); //,mpb
+                
 
                 let mut fo = FetchOptions::new();
                 fo.remote_callbacks(cb);
@@ -160,7 +211,7 @@ impl RepositoryFactory {
             .collect::<Vec<PathBuf>>()
     }
 
-    pub fn create(mut self) -> Repository {
+    pub fn create(mut self, mpb: Arc<Mutex<MultiProgress>>) -> Repository {
         let mut path_segments = self.url.path_segments().unwrap();
         let owner = path_segments.next().unwrap().to_string();
         let repo_name = path_segments.next().unwrap().to_string();
@@ -175,8 +226,14 @@ impl RepositoryFactory {
         .unwrap();
 
         let mut clone_paths: Vec<PathBuf> = Vec::new();
-        let repo: git2::Repository =
-            Self::clone(&self.url, repo_name.clone(), clone_location.as_path()).unwrap();
+        let repo = Self::clone(
+            &self.url,
+            repo_name.clone(),
+            clone_location.as_path(),
+            //mpb,
+        )
+        .unwrap();
+
         let head = Self::get_head_branch(&repo);
         if !head.is_empty() {
             clone_paths.push(clone_location);
@@ -185,7 +242,12 @@ impl RepositoryFactory {
         // Clone all branches
         if self.all_branches {
             let mut branches = Self::fetch_branches(&repo, &head);
-            let paths = Self::clone_branches(self.url.clone(), repo_name.clone(), branches.clone());
+            let paths = Self::clone_branches(
+                self.url.clone(),
+                repo_name.clone(),
+                branches.clone(),
+                //self.mpb,
+            );
 
             branches.push(BranchName(head));
             self.branches = branches.clone();
@@ -331,30 +393,10 @@ impl Committers {
 fn create_multi_callback(
     repo_name: String,
     branch_name: String,
-    mpb: MutexGuard<'_, MultiProgress>,
+    pb_clone: ProgressBar,
+    pb_delta: ProgressBar,
 ) -> RemoteCallbacks<'static> {
     let mut cb = RemoteCallbacks::new();
-    let pb_clone: ProgressBar = ProgressBar::new(0);
-    let pb_delta: ProgressBar = ProgressBar::new(0);
-
-    mpb.add(pb_clone.to_owned());
-    //mpb.add(pb_delta.to_owned());
-    mpb.insert_after(&pb_clone, pb_delta.to_owned());
-
-    let style_clone = ProgressStyle::with_template(
-        "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-    )
-    .unwrap()
-    .progress_chars("#>-");
-
-    let style_delta = ProgressStyle::with_template(
-        "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-    )
-    .unwrap()
-    .progress_chars("#>-");
-
-    pb_clone.set_style(style_clone);
-    pb_delta.set_style(style_delta);
 
     let mut is_clone_finished = false;
     let mut is_delta_finished = false;
@@ -362,26 +404,26 @@ fn create_multi_callback(
 
     cb.transfer_progress(move |stats| {
         if stats.received_objects() == 0 {
-            pb_clone.set_message(format!("[{}][{}]", repo_name, branch_name));
-            pb_clone.set_length(stats.total_objects().try_into().unwrap());
+            //pb_clone.set_message(format!("[{}][{}]", repo_name, branch_name));
+            //pb_clone.set_length(stats.total_objects().try_into().unwrap());
         }
 
         if stats.indexed_deltas() > 0 && !delta_length_is_set {
-            pb_delta.set_message(format!("[{}][{}]", repo_name, branch_name));
-            pb_delta.set_length(stats.total_deltas().try_into().unwrap());
+           //pb_delta.set_message(format!("[{}][{}]", repo_name, branch_name));
+           //pb_delta.set_length(stats.total_deltas().try_into().unwrap());
             delta_length_is_set = true;
         }
 
         if (stats.received_objects() <= stats.total_objects()) && !is_clone_finished {
-            pb_clone.set_position(stats.received_objects().try_into().unwrap());
-            pb_clone.tick();
+            //pb_clone.set_position(stats.received_objects().try_into().unwrap());
+            //pb_clone.tick();
             if stats.received_objects() == stats.total_objects() {
-                pb_clone.finish_with_message(format!(
-                    "[{} ✅][{} ✅]",
-                    repo_name.clone(),
-                    branch_name.clone()
-                ));
-                pb_clone.finish_and_clear();
+                //pb_clone.finish_with_message(format!(
+                //    "[{} ✅][{} ✅]",
+                //    repo_name.clone(),
+                //    branch_name.clone()
+                //));
+                //pb_clone.finish_and_clear();
                 is_clone_finished = true;
             }
         }
@@ -391,15 +433,14 @@ fn create_multi_callback(
             && is_clone_finished
             && !is_delta_finished
         {
-            pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
+            //pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
 
             if stats.indexed_deltas() == stats.total_deltas() {
-                pb_delta.finish_with_message(format!(
-                    "[{} ✅][{} ✅]",
-                    repo_name.clone(),
-                    branch_name.clone()
-                ));
-                pb_delta.finish_and_clear();
+                //pb_delta.finish_with_message(format!(
+                //    "[{} ✅][{} ✅]",
+                //    repo_name.clone(),
+                //    branch_name.clone()
+                //));
                 is_delta_finished = true;
             }
         }
@@ -407,83 +448,6 @@ fn create_multi_callback(
         true
     });
 
-    cb
-}
-
-fn create_callback(repo_name: String, branch_name: String) -> RemoteCallbacks<'static> {
-    let mut cb = RemoteCallbacks::new();
-
-    let pb_clone: Arc<ProgressBar> = Arc::new(ProgressBar::new(0));
-    let pb_delta: Arc<ProgressBar> = Arc::new(ProgressBar::hidden());
-
-    let style_clone = ProgressStyle::with_template(
-        "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-    )
-    .unwrap()
-    .progress_chars("#>-");
-
-    let style_delta = ProgressStyle::with_template(
-        "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-    )
-    .unwrap()
-    .progress_chars("#>-");
-
-    pb_clone.set_style(style_clone);
-    pb_delta.set_style(style_delta);
-
-    let mut is_clone_finished = false;
-    let mut is_delta_finished = false;
-    let mut delta_length_is_set = false;
-
-    cb.transfer_progress(move |stats| {
-        if stats.received_objects() == 0 {
-            pb_clone.set_message(format!("[{}][{}]", repo_name.clone(), branch_name.clone()));
-            pb_clone.set_length(stats.total_objects().try_into().unwrap());
-        }
-
-        if stats.indexed_deltas() > 0 && !delta_length_is_set {
-            pb_delta.set_message(format!("[{}][{}]", repo_name.clone(), branch_name.clone()));
-            pb_delta.set_length(stats.total_deltas().try_into().unwrap());
-            delta_length_is_set = true;
-        }
-
-        if (stats.received_objects() <= stats.total_objects()) && !is_clone_finished {
-            pb_clone.set_position(stats.received_objects().try_into().unwrap());
-            pb_clone.tick();
-            if stats.received_objects() == stats.total_objects() {
-                pb_clone.finish_with_message(format!(
-                    "[{} ✅][{} ✅]",
-                    repo_name.clone(),
-                    branch_name.clone()
-                ));
-                pb_clone.finish_and_clear();
-                is_clone_finished = true;
-
-                // make hidden delta bar appear
-                pb_delta.set_draw_target(ProgressDrawTarget::stdout());
-            }
-        }
-
-        if (stats.indexed_deltas() <= stats.total_deltas())
-            && stats.total_deltas() > 0
-            && is_clone_finished
-            && !is_delta_finished
-        {
-            pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
-
-            if stats.indexed_deltas() == stats.total_deltas() {
-                pb_delta.finish_with_message(format!(
-                    "[{} ✅][{} ✅]",
-                    repo_name.clone(),
-                    branch_name.clone()
-                ));
-                pb_delta.finish_and_clear();
-                is_delta_finished = true;
-            }
-        }
-
-        true
-    });
 
     cb
 }

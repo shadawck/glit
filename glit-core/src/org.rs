@@ -31,7 +31,7 @@ impl OrgFactory {
     pub fn with_config(org_config: OrgConfig) -> Self {
         // CLI param
         let url = org_config.url;
-        let all_branches: bool = org_config.all_branches;
+        let all_branches = org_config.all_branches;
 
         // Craft other param
         let mut path_segment = url.path_segments().unwrap();
@@ -81,7 +81,8 @@ impl Factory for OrgFactory {
 
         let parser = Html::parse_document(&text);
         let selector_repositories_count =
-            Selector::parse(r#"main > div > div > div > div > div > div > div > strong"#).unwrap();
+            Selector::parse(r#"main > div > div > div > div > div > div > div > span > strong"#)
+                .unwrap();
 
         let repository_count_str = parser
             .select(&selector_repositories_count)

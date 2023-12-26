@@ -6,7 +6,6 @@
 
 **README Sections:**  [Use](#use) — [Installation](#installation)
 
-<img src="./img/demo.gif">
 <br></br>
 </div>
 
@@ -52,7 +51,7 @@ glit user -u https://github.com/rust
 Fetch emails of all user/committer from all repositories of an organization.
 
 ```bash
-glit org -a -u https://github.com/netflix
+glit org -u https://github.com/netflix
 ```
 
 ## Other options
@@ -62,13 +61,13 @@ glit org -a -u https://github.com/netflix
 
 # Installation
 
-### With cargo
+## With cargo
 
 ```bash
 cargo install glit-cli
 ```
 
-### From Github Release
+## From Github Release
 
 [Download a release](https://github.com/shadawck/glit/releases/lastest), extract and run.
 
@@ -80,4 +79,3 @@ mv glit /usr/local/bin/
 ## ROADMAP
 
 - [ ] Change git2 for Gitoxide via the [git_repository](https://docs.rs/git-repository/latest/git_repository/) crate.
-  - Use rustls-tls

@@ -75,7 +75,8 @@ impl Factory for UserFactory {
 
         let parser = Html::parse_document(&text);
         let selector_repositories_count =
-            Selector::parse(r#"turbo-frame > div > div > div > div > strong"#).unwrap();
+            Selector::parse(r#"div > div.user-repo-search-results-summary > strong:nth-child(1)"#)
+                .unwrap();
 
         let repository_count_str = parser
             .select(&selector_repositories_count)

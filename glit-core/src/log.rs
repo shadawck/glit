@@ -21,24 +21,24 @@ impl Log {
         );
 
         let walk: Vec<Oid> = revwalk.map(|id| id.unwrap()).collect();
-        let pb = ProgressBar::new(walk.len().try_into().unwrap());
-        pb.set_message(format!("[{}][{}]", repo_name, branch));
 
-        let style = ProgressStyle::with_template(
-            "🏃 REVWALKING {msg}{spinner:.green}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-        )
-        .unwrap()
-        .progress_chars("#>-");
+        //let pb = ProgressBar::new(walk.len().try_into().unwrap());
+        //pb.set_message(format!("[{}][{}]", repo_name, branch));
+        //let style = ProgressStyle::with_template(
+        //    "🏃 REVWALKING {msg}{spinner:.green}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+        //)
+        //.unwrap()
+        //.progress_chars("#>-");
 
-        pb.set_style(style);
+        //pb.set_style(style);
 
         for (i, commit_id) in walk.into_iter().enumerate() {
-            pb.set_position(i.try_into().unwrap());
+            //pb.set_position(i.try_into().unwrap());
             repo_data.update(&repo, commit_id);
         }
 
-        pb.finish_with_message(format!("[{} ✅][{} ✅]", repo_name, branch));
-
+        //pb.finish_with_message(format!("[{} ✅][{} ✅]", repo_name, branch));
+        //pb.finish_and_clear();
         repo_data
     }
 }

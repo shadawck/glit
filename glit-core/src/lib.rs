@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use crossbeam_channel::bounded;
 use dashmap::DashMap;
 use futures_util::future::join_all;
+use indicatif::MultiProgress;
 use rayon::ThreadPoolBuilder;
 use repo::Repository;
 use reqwest::{Client, Url};
@@ -11,7 +12,7 @@ use scraper::{Html, Selector};
 use std::{
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     time::Instant,
 };
@@ -101,15 +102,19 @@ pub trait ExtractLog {
 
         let mut queue_handles = Vec::with_capacity(repo_count);
         let (tx, rx) = bounded(repo_count);
+        let mpb: Arc<Mutex<MultiProgress>> = Arc::new(Mutex::new(MultiProgress::new()));
 
-        for _ in 0..repo_count {
+        for i in 0..repo_count {
             let tx = tx.clone();
             let rx_url = rx_url.clone();
+            let mpb = mpb.clone();
 
             let handle = rayon::spawn(move || {
                 let clonable_url = rx_url.recv().unwrap();
                 let repo_config = RepositoryConfig::new(clonable_url, all_branches);
-                let repo = RepositoryFactory::with_config(repo_config).create();
+
+                let repo = RepositoryFactory::with_config(repo_config).create(mpb);
+
                 tx.send(repo).unwrap();
                 drop(tx);
             });
@@ -129,7 +134,6 @@ pub trait ExtractLog {
         let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
             DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
         );
-
         let atomic_count = Arc::new(AtomicUsize::new(0));
 
         let dash_result: Arc<DashMap<RepoName, Repository, RandomState>> =
@@ -144,11 +148,12 @@ pub trait ExtractLog {
                         drop(rx);
 
                         let data = repo.clone().extract_log();
-                        let repo_name_key = RepoName(repo.name);
+                        let repo_name_key = RepoName(repo.name.clone());
                         dash.insert(repo_name_key, data);
                         atomic_count.fetch_add(1, Ordering::Relaxed);
                         println!(
-                            "Repository handled : {}/{}",
+                            "Repository {} handled : {}/{}",
+                            repo.name,
                             atomic_count.load(Ordering::Relaxed),
                             repo_count
                         );

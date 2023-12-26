@@ -5,22 +5,25 @@ pub mod printer;
 pub mod repository_command_handler;
 pub mod user_command_handler;
 pub mod utils;
-use std::time::Instant;
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use clap::{crate_version, Arg, Command};
 use colored::Colorize;
 use exporter::Exporter;
 use glit_core::{
     org::{Org, OrgFactory},
-    repo::{Repository, RepositoryFactory},
+    repo::RepositoryFactory,
     user::{User, UserFactory},
     Logger,
 };
 
 use global_option_handler::GlobalOptionHandler;
+use indicatif::MultiProgress;
 use log::LevelFilter;
 use org_command_handler::OrgCommandHandler;
-use printer::Printer;
 use repository_command_handler::RepoCommandHandler;
 use reqwest::ClientBuilder;
 
@@ -47,7 +50,15 @@ async fn main() {
                 .help("export data to json")
                 .num_args(1)
                 .global(true),
+        ).arg(
+            Arg::new("thread")
+                .short('t')
+                .long("thread")
+                .help("Specify the number of thread")
+                .num_args(1)
+                .global(true),
         )
+
         .subcommand(
             Command::new("repo")
                 .about("Extract emails from repository")
@@ -128,8 +139,10 @@ async fn main() {
         Some(("repo", sub_match)) => {
             let time = Instant::now();
             let repository_config = RepoCommandHandler::config(sub_match);
-            let repository: Repository = RepositoryFactory::with_config(repository_config).create();
 
+            let mpb: Arc<Mutex<MultiProgress>> = Arc::new(Mutex::new(MultiProgress::new()));
+
+            let repository = RepositoryFactory::with_config(repository_config).create(mpb);
             let repo_extraction = repository.extract_log();
 
             //let printer = Printer::<Repository>::new(global_config.clone());
