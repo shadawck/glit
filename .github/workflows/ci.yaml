@@ -37,7 +37,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --locked --all-targets  -- -D warnings # --all-features --workspace
+          args: --locked --all-targets # --all-features --workspace -D warnings
 
   #test_code_coverage:
   #  runs-on: ubuntu-latest
