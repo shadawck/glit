@@ -1,6 +1,6 @@
 [package]
 name = "glit-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["shadawck <shadawck@protonmail.com>"]
 description = "Core - Retrieve all mail related to a git repository, user, or organization"
