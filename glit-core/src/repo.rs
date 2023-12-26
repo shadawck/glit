@@ -22,7 +22,6 @@ use std::{
     time::Instant,
 };
 
-
 const DEFAULT_PATH: &str = "/tmp";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,8 +102,8 @@ impl RepositoryFactory {
         path: &Path,
         //mpb: Arc<Mutex<MultiProgress>>,
     ) -> Result<git2::Repository, git2::Error> {
-        let pb_clone= ProgressBar::new(0);
-        let pb_delta= ProgressBar::new(0);
+        //let pb_clone = ProgressBar::new(0);
+        //let pb_delta = ProgressBar::new(0);
 
         //mpb.lock().unwrap().add(pb_clone.clone());
 
@@ -122,7 +121,7 @@ impl RepositoryFactory {
         //
         //pb_clone.set_style(style_clone);
         //pb_delta.set_style(style_delta);
-        let cb = create_multi_callback(repo_name, "default".to_string(), pb_clone, pb_delta); //, mpb
+        let cb = create_multi_callback(repo_name, "default".to_string()); //  pb_clone, pb_delta , mpb
 
         let mut fo = FetchOptions::new();
         fo.remote_callbacks(cb);
@@ -165,25 +164,29 @@ impl RepositoryFactory {
 
                 let branch_clone_path = PathBuf::from_str(&path).unwrap();
 
-                let pb_clone  = ProgressBar::new(0);
-                let pb_delta =  ProgressBar::new(0);
-        
-                let style_clone = ProgressStyle::with_template(
-                    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-                )
-                .unwrap()
-                .progress_chars("#>-");
-        
-                let style_delta = ProgressStyle::with_template(
-                    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-                )
-                .unwrap()
-                .progress_chars("#>-");
-        
-                pb_clone.set_style(style_clone);
-                pb_delta.set_style(style_delta);
-                let cb = create_multi_callback(repo_name.clone(), branch.to_string(), pb_clone, pb_delta); //,mpb
-                
+                //let pb_clone = ProgressBar::new(0);
+                //let pb_delta = ProgressBar::new(0);
+
+                //let style_clone = ProgressStyle::with_template(
+                //    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+                //)
+                //.unwrap()
+                //.progress_chars("#>-");
+                //
+                //let style_delta = ProgressStyle::with_template(
+                //    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+                //)
+                //.unwrap()
+                //.progress_chars("#>-");
+                //
+                //pb_clone.set_style(style_clone);
+                //pb_delta.set_style(style_delta);
+                let cb = create_multi_callback(
+                    repo_name.clone(),
+                    branch.to_string(),
+                    //pb_clone,
+                    //pb_delta,
+                ); //,mpb
 
                 let mut fo = FetchOptions::new();
                 fo.remote_callbacks(cb);
@@ -393,8 +396,8 @@ impl Committers {
 fn create_multi_callback(
     repo_name: String,
     branch_name: String,
-    pb_clone: ProgressBar,
-    pb_delta: ProgressBar,
+    //pb_clone: ProgressBar,
+    //pb_delta: ProgressBar,
 ) -> RemoteCallbacks<'static> {
     let mut cb = RemoteCallbacks::new();
 
@@ -409,8 +412,8 @@ fn create_multi_callback(
         }
 
         if stats.indexed_deltas() > 0 && !delta_length_is_set {
-           //pb_delta.set_message(format!("[{}][{}]", repo_name, branch_name));
-           //pb_delta.set_length(stats.total_deltas().try_into().unwrap());
+            //pb_delta.set_message(format!("[{}][{}]", repo_name, branch_name));
+            //pb_delta.set_length(stats.total_deltas().try_into().unwrap());
             delta_length_is_set = true;
         }
 
@@ -447,7 +450,6 @@ fn create_multi_callback(
 
         true
     });
-
 
     cb
 }
