@@ -3,10 +3,17 @@ members = ["glit-core", "glit-cli"]
 resolver = "2"
 
 [profile.dev]
-opt-level = 0
-incremental = true
+opt-level = 0           # Optimization level.
+debug = true            # Include debug info.
+debug-assertions = true # Enables debug assertions.
+overflow-checks = true  # Enables runtime integer overflow checks.
+lto = false             # Sets link-time optimization.
+panic = 'unwind'        # The panic strategy.
+incremental = true      # Incremental compilation.
+codegen-units = 16      # Number of code generation units.
+rpath = false           # Sets the rpath linking option.
 
 [profile.release]
-lto = true
-opt-level = 3
-panic = "unwind"
+debug = true
+incremental = false
+lto = false
