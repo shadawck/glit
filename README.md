@@ -5,10 +5,11 @@
 **glit** is a little osint tool to retrieve all mails of user related to a git repository, a git user or a git organization.
 
 **README Sections:**  [Use](#use) — [Installation](#installation)
-
 <br></br>
 </div>
 
+
+https://github.com/shadawck/glit/assets/10743909/3c91e79b-c190-467a-81e5-4268013667e8
 
 # Use
 
