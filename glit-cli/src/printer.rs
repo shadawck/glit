@@ -11,14 +11,14 @@ impl<T> Printer<T> {
     pub fn new(global_config: GlobalConfig) -> Self {
         Self {
             global_config,
-            data: PhantomData::default(),
+            data: PhantomData,
         }
     }
 }
 
 impl Printer<Repository> {
     pub fn print_repo(&self, data: &Repository) {
-        for (branch, value) in &data.branch_data {
+        for (branch, value) in data.branch_data.clone() {
             let branch_format = format!("[ Branch : {} ]", branch.to_string()).yellow();
             println!("{}", branch_format);
             for (author, data) in &value.committers {

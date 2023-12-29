@@ -5,10 +5,7 @@ pub mod printer;
 pub mod repository_command_handler;
 pub mod user_command_handler;
 pub mod utils;
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::time::Instant;
 
 use clap::{crate_version, Arg, Command};
 use colored::Colorize;
@@ -21,7 +18,6 @@ use glit_core::{
 };
 
 use global_option_handler::GlobalOptionHandler;
-use indicatif::MultiProgress;
 use log::LevelFilter;
 use org_command_handler::OrgCommandHandler;
 use repository_command_handler::RepoCommandHandler;
@@ -128,7 +124,7 @@ async fn main() {
         _ => LevelFilter::Debug,
     };
 
-    env_logger::builder().filter_level(level).init();
+    //env_logger::builder().filter_level(level).init();
     log::info!(
         "Brought to you by {} - {}",
         "@shadawck".bright_purple(),
@@ -140,9 +136,7 @@ async fn main() {
             let time = Instant::now();
             let repository_config = RepoCommandHandler::config(sub_match);
 
-            let mpb: Arc<Mutex<MultiProgress>> = Arc::new(Mutex::new(MultiProgress::new()));
-
-            let repository = RepositoryFactory::with_config(repository_config).create(mpb);
+            let repository = RepositoryFactory::with_config(repository_config).create();
             let repo_extraction = repository.extract_log();
 
             //let printer = Printer::<Repository>::new(global_config.clone());

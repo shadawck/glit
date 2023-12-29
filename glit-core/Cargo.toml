@@ -16,10 +16,10 @@ reqwest = { version = "0.11.18", default-features = false, features = [
     "json",
     "rustls-tls",
 ] }
-tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
+#tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
 futures-util = "0.3.28"
 scraper = "0.18.1"
-git2 = "0.17.2"
+#git2 = "0.17.2"
 rand = "0.8.5"
 ahash = "0.8.3"
 serde = { version = "1.0.178", default-features = false, features = ["derive"] }
@@ -29,4 +29,42 @@ async-trait = "0.1.72"
 tracing = "0.1.37"
 crossbeam-channel = "0.5.8"
 log = "0.4.19"
-indicatif = { version = "0.17.5", features = ["rayon"] }
+
+
+gix = { version = "0.55.2", features = [
+    "parallel",
+    "max-performance",
+    "worktree-mutation",
+    "blocking-network-client",
+    "blocking-http-transport-reqwest-rust-tls",
+    #"blocking-http-transport-reqwest",
+    "progress-tree",
+] }
+
+tabled = { version = "0.15.0" }
+gitoxide = { version = "0.32.0", default-features = false, features = [
+    "gitoxide-core-blocking-client",
+    "http-client-reqwest",
+    #"max-control",
+    #"tracing",
+    "fast-safe",
+    "gitoxide-core-tools-query",
+    "gitoxide-core-tools-corpus",
+    "gitoxide-core-tools",
+    "prodash-render-line",
+    "prodash-render-tui",
+    "pretty-cli",
+    "prodash-render-line-crossterm",
+    #"max-pure",
+    "tracing",
+] }
+gitoxide-core = { version = "0.33.1", features = ["blocking-client"] }
+crosstermion = { version = "0.13.0" }
+owo-colors = "4.0.0"
+prodash = { version = "28.0.0", default-features = false, features = [
+    "render-line-autoconfigure",
+    "progress-tree",
+    "render-tui",
+    "render-tui-crossterm",
+    "unit-human",
+] }

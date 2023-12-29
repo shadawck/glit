@@ -12,7 +12,7 @@ impl<T> Exporter<T> {
     pub fn new(global_config: GlobalConfig) -> Self {
         Self {
             global_config,
-            _phantom_data: PhantomData::default(),
+            _phantom_data: PhantomData,
         }
     }
 }

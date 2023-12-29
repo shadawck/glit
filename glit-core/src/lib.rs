@@ -3,16 +3,15 @@ use ahash::RandomState;
 use async_trait::async_trait;
 use crossbeam_channel::bounded;
 use dashmap::DashMap;
-use futures_util::future::join_all;
-use indicatif::MultiProgress;
-use rayon::ThreadPoolBuilder;
+//use futures_util::future::join_all;
+//use rayon::ThreadPoolBuilder;
 use repo::Repository;
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 use std::{
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc,
     },
     time::Instant,
 };
@@ -64,114 +63,136 @@ pub trait ExtractLog {
         let repo_count = self.get_repo_count();
         let all_branches = self.get_all_branches();
         let pages_urls = self.get_pages_url();
-        let url = self.get_url();
+        //let url = self.get_url().clone();
 
-        let (tx_url, rx_url) = bounded(repo_count);
-        let mut tokio_handles = Vec::with_capacity(pages_urls.len());
+        //let (tx_url, rx_url) = bounded(repo_count);
+        //let mut tokio_handles = Vec::with_capacity(pages_urls.len());
+
+        let mut reqwest_urls = Vec::new();
         for page in pages_urls {
-            let client = client.clone();
-            let url = url.clone();
-            let tx_url = tx_url.clone();
-            let selector = selector.clone();
+            //    let client = client.clone();
+            //    let url = url.clone();
+            //    let tx_url = tx_url.clone();
+            //    let selector = selector.clone();
+            //
+            //    //let handle = tokio::spawn(async move {
+            let resp = client.get(page).send().await.unwrap();
+            let text = resp.text().await.unwrap();
+            let parser = Html::parse_document(&text);
 
-            let handle = tokio::spawn(async move {
-                let resp = client.get(page).send().await.unwrap();
-                let text = resp.text().await.unwrap();
-                let parser = Html::parse_document(&text);
+            parser
+                .select(&selector)
+                .map(|link| {
+                    let url = self.get_url().clone();
+                    let endpoint_url = link.clone().value().attr("href").unwrap().to_string();
+                    let repo_name = endpoint_url.split('/').last().unwrap();
 
-                parser
-                    .select(&selector)
-                    .map(|link| {
-                        let endpoint_url = link.value().attr("href").unwrap().to_string();
-                        let repo_name = endpoint_url.split('/').last().unwrap();
-                        let repo_url = format!("{}{}/", url, repo_name);
-                        let sending = tx_url.send(Url::parse(&repo_url).unwrap());
-                        match sending {
-                            Ok(_) => tracing::debug!("Send url {}", repo_url),
-                            Err(e) => {
-                                error!("Failed to send {} with : [{:?}]", repo_url, e)
-                            }
-                        }
-                    })
-                    .for_each(drop);
-            });
+                    let repo_url = format!("{}{}/", url.clone(), repo_name);
 
-            tokio_handles.push(handle);
+                    let url_parsed = Url::parse(&repo_url).unwrap();
+
+                    reqwest_urls.push(url_parsed);
+
+                    //let sending = tx_url.send(Url::parse(&repo_url).unwrap());
+                    //match sending {
+                    //    Ok(_) => tracing::debug!("Send url {}", repo_url),
+                    //    Err(e) => {
+                    //        error!("Failed to send {} with : [{:?}]", repo_url, e)
+                    //    }
+                    //}
+                })
+                .for_each(drop);
+
+            // });
+            // tokio_handles.push(handle);
         }
-        drop(tx_url);
+        //drop(tx_url);
+        //
+        ////let mut queue_handles = Vec::with_capacity(repo_count);
+        //let (tx, rx) = bounded(repo_count);
 
-        let mut queue_handles = Vec::with_capacity(repo_count);
-        let (tx, rx) = bounded(repo_count);
-        let mpb: Arc<Mutex<MultiProgress>> = Arc::new(Mutex::new(MultiProgress::new()));
+        let mut repos = Vec::new();
+        for _ in 0..repo_count {
+            let reqwest_urls = reqwest_urls.clone();
+            //    let tx = tx.clone();
+            //    let rx_url = rx_url.clone();
+            //
+            //    //let handle = tokio::spawn(async move {
 
-        for i in 0..repo_count {
-            let tx = tx.clone();
-            let rx_url = rx_url.clone();
-            let mpb = mpb.clone();
+            for clonable_url in reqwest_urls {
+                //let clonable_url = rx_url.recv().unwrap();
 
-            let handle = rayon::spawn(move || {
-                let clonable_url = rx_url.recv().unwrap();
-                let repo_config = RepositoryConfig::new(clonable_url, all_branches);
+                let repo_config = RepositoryConfig::new(clonable_url, all_branches.clone());
 
-                let repo = RepositoryFactory::with_config(repo_config).create(mpb);
+                let repo = RepositoryFactory::with_config(repo_config).create();
+                repos.push(repo);
 
-                tx.send(repo).unwrap();
-                drop(tx);
-            });
-
-            queue_handles.push(handle)
+                // tx.send(repo).unwrap();
+                // drop(tx);
+                // //})
+                // //.await;
+                // //queue_handles.push(handle)
+            }
         }
-        drop(tx);
-        drop(rx_url);
+        //drop(tx);
+        //drop(rx_url);
+        //
+        //let num_threads = rayon::max_num_threads();
+        //
+        //tracing::info!("Number of threads : {}", num_threads);
+        //
+        //let pool = ThreadPoolBuilder::new()
+        //    .num_threads(num_threads - 2)
+        //    .build()
+        //    .unwrap();
+        //
+        //let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
+        //    DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
+        //);
+        //let atomic_count = Arc::new(AtomicUsize::new(0));
 
-        tracing::info!("Number of threads : {}", rayon::current_num_threads());
-        let current_num_thread = rayon::current_num_threads() - 2;
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(current_num_thread)
-            .build()
-            .unwrap();
+        let dash_result = DashMap::with_capacity_and_hasher(repo_count, RandomState::new());
+        ////pool.scope(move |scope| {
+        for _ in 0..repo_count {
+            //    let dash = dash.clone();
+            //    let rx = rx.clone();
+            //    let atomic_count = atomic_count.clone();
+            //
+            let repos = repos.clone();
+            for repo in repos {
+                //    //scope.spawn(move |_| {
+                //    let repo = rx.recv().unwrap();
+                //    drop(rx);
+                //
+                let data = repo.clone().extract_log();
+                let repo_name_key = RepoName(repo.name.clone());
+                dash_result.insert(repo_name_key, data);
 
-        let dash: Arc<DashMap<RepoName, Repository, RandomState>> = Arc::new(
-            DashMap::with_capacity_and_hasher(repo_count, RandomState::new()),
-        );
-        let atomic_count = Arc::new(AtomicUsize::new(0));
+                //atomic_count.fetch_add(1, Ordering::Relaxed);
+                //println!(
+                //    "Repository {} handled : {}/{}",
+                //    repo.name,
+                //    atomic_count.load(Ordering::Relaxed),
+                //    repo_count
+                //);
+                //})
+            }
+        }
+        //  dash
+        //});
+        //drop(pool);
+        //
+        ////join_all(tokio_handles).await;
+        //
+        //tracing::info!(
+        //    "Fetching and Cloning handled in {:?} for {}",
+        //    start_a.elapsed(),
+        //    repo_count
+        //);
+        //
+        //Arc::try_unwrap(dash_result).unwrap()
 
-        let dash_result: Arc<DashMap<RepoName, Repository, RandomState>> =
-            pool.scope(move |scope| {
-                for _ in 0..repo_count {
-                    let dash = dash.clone();
-                    let rx = rx.clone();
-                    let atomic_count = atomic_count.clone();
-
-                    scope.spawn(move |_| {
-                        let repo = rx.recv().unwrap();
-                        drop(rx);
-
-                        let data = repo.clone().extract_log();
-                        let repo_name_key = RepoName(repo.name.clone());
-                        dash.insert(repo_name_key, data);
-                        atomic_count.fetch_add(1, Ordering::Relaxed);
-                        println!(
-                            "Repository {} handled : {}/{}",
-                            repo.name,
-                            atomic_count.load(Ordering::Relaxed),
-                            repo_count
-                        );
-                    })
-                }
-                dash
-            });
-        drop(pool);
-
-        join_all(tokio_handles).await;
-
-        tracing::info!(
-            "Fetching and Cloning handled in {:?} for {}",
-            start_a.elapsed(),
-            repo_count
-        );
-
-        Arc::try_unwrap(dash_result).unwrap()
+        dash_result
     }
 
     async fn extract_log(mut self, client: &Client) -> Self;

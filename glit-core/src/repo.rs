@@ -4,41 +4,52 @@ use crate::{
     types::{AuthorName, BranchName},
 };
 use ahash::{HashMap, HashMapExt};
-use git2::{build::RepoBuilder, BranchType, Oid};
-use git2::{FetchOptions, RemoteCallbacks};
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use dashmap::DashMap;
+use gix::{
+    bstr::{BString, ByteSlice},
+    progress::{self},
+    remote::fetch::Shallow,
+    Commit, ThreadSafeRepository,
+};
+
+use gitoxide::shared::pretty::prepare_and_run;
+use gitoxide_core as core;
 
 use rand::distributions::{Alphanumeric, DistString};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    fs::remove_dir_all,
+    fs::{self, remove_dir_all},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{Arc, Mutex},
     time::Instant,
 };
 
 const DEFAULT_PATH: &str = "/tmp";
 
+#[derive(Debug, Clone)]
+pub struct BranchData {
+    pub branch_path: PathBuf,
+    pub repo: ThreadSafeRepository,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Repository {
+    pub url: String,
     pub name: String,
     pub owner: String,
-    branches: Vec<BranchName>,
     #[serde(skip)]
-    clone_paths: Vec<PathBuf>,
-    pub branch_data: HashMap<BranchName, Committers>,
+    pub repo_per_branches: DashMap<BranchName, BranchData>,
+    pub branch_data: DashMap<BranchName, Committers>,
 }
 
 pub struct RepositoryFactory {
     all_branches: bool,
     branches: Vec<BranchName>,
     url: Url,
-    //mpb: Arc<Mutex<MultiProgress>>,
 }
 
 impl RepositoryFactory {
@@ -46,97 +57,99 @@ impl RepositoryFactory {
         let url = repository_config.url;
         let all_branches: bool = repository_config.all_branches;
 
-        //let mpb = Arc::new(Mutex::new(MultiProgress::new()));
-
         RepositoryFactory {
             all_branches,
             url,
             branches: Vec::<BranchName>::new(),
-            //mpb,
         }
     }
 
-    fn get_head_branch(repo: &git2::Repository) -> String {
-        let head = repo.head();
-        if let Ok(head_ref) = head {
-            head_ref
-                .name()
-                .unwrap()
-                .split('/')
-                .last()
-                .unwrap()
-                .to_string()
-        } else {
-            "".to_string()
-        }
-    }
+    fn get_default_local_branch(repo: &gix::ThreadSafeRepository) -> String {
+        let binding = repo.to_thread_local();
+        let references = binding.references().unwrap();
 
-    pub fn fetch_branches(repository: &git2::Repository, head: &str) -> Vec<BranchName> {
-        let mut branches = repository
-            .branches(Some(BranchType::Remote))
+        let local = references
+            .local_branches()
             .unwrap()
-            .map(|b| {
-                let branch = b.unwrap().0;
-                let branch_name = branch.name().unwrap().unwrap();
-                let string_branch = branch_name.split("origin/").last().unwrap().to_string();
-                BranchName(string_branch)
+            .map(|a| a.unwrap().name().shorten().as_bstr().to_string())
+            .collect::<Vec<String>>();
+
+        local.get(0).unwrap().to_string()
+    }
+
+    pub fn find_remote_branches(
+        repository: &gix::ThreadSafeRepository,
+        default_local_branch: &str,
+    ) -> Vec<BranchName> {
+        let binding = repository.to_thread_local();
+        let references = binding.references().unwrap();
+
+        let mut remotes = references
+            .remote_branches()
+            .unwrap()
+            .map(|origins| {
+                let origins = origins.unwrap();
+                let short_origin_name = origins.name().shorten();
+                //println!("Short origin name {short_origin_name:#?}");
+                BranchName(short_origin_name.to_string())
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<BranchName>>();
 
-        branches.retain(|value| *value != BranchName("HEAD".to_string()));
-        branches.retain(|value| *value != BranchName(head.to_string())); // Do not clone default branch two time
+        println!("All branches before retain : {:#?}", remotes);
 
-        branches
+        remotes.retain(|value| *value != BranchName("origin/HEAD".to_string()));
+        remotes.retain(|value| *value != BranchName(default_local_branch.to_string())); // Do not clone default branch two time
+
+        println!("All branches after retain : {:#?}", remotes);
+
+        remotes
     }
 
-    pub fn prepare_branch(branches: Vec<BranchName>) -> Vec<BranchName> {
-        branches
-            .iter()
-            .map(|branch| BranchName(branch.to_string().replace('/', "_")))
-            .collect::<Vec<_>>()
-    }
+    fn clone(url: reqwest::Url, path: PathBuf) -> gix::Repository {
+        let urlx = gix::url::parse(url.as_str().into()).unwrap();
+        println!("Url: {:?}", urlx.clone().to_bstring());
 
-    fn clone(
-        url: &Url,
-        repo_name: String,
-        path: &Path,
-        //mpb: Arc<Mutex<MultiProgress>>,
-    ) -> Result<git2::Repository, git2::Error> {
-        //let pb_clone = ProgressBar::new(0);
-        //let pb_delta = ProgressBar::new(0);
+        let mut prepare_clone = gix::prepare_clone_bare(urlx.clone(), path.clone()).unwrap();
+        //println!("Cloning {:?} into {:#?}...", urlx.to_bstring());
 
-        //mpb.lock().unwrap().add(pb_clone.clone());
+        let (prepare_checkout, _) = prepare_clone
+            .fetch_then_checkout(progress::Discard, &gix::interrupt::IS_INTERRUPTED)
+            .unwrap();
 
-        //let style_clone = ProgressStyle::with_template(
-        //    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-        //)
-        //.unwrap()
-        //.progress_chars("#>-");
-        //
-        //let style_delta = ProgressStyle::with_template(
-        //    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-        //)
-        //.unwrap()
-        //.progress_chars("#>-");
-        //
-        //pb_clone.set_style(style_clone);
-        //pb_delta.set_style(style_delta);
-        let cb = create_multi_callback(repo_name, "default".to_string()); //  pb_clone, pb_delta , mpb
+        println!("Clone ended");
 
-        let mut fo = FetchOptions::new();
-        fo.remote_callbacks(cb);
+        let repo = prepare_checkout.persist();
+        println!(
+            "default branch head commit id : {}",
+            repo.head_commit().unwrap().id.to_string()
+        );
 
-        let repo = RepoBuilder::new()
-            .bare(true)
-            .fetch_options(fo)
-            .clone(url.as_str(), path);
+        // CLONE TESTING
+        let trace = false;
+        let auto_verbose = true;
+        let progress_keep_open = true;
+        let progress = true;
 
-        match repo {
-            Ok(_) => log::debug!("Cloning repo at {:?}", path.to_str().unwrap()),
-            Err(_) => {
-                log::error!("Failed to clone")
-            }
-        }
+        let config = vec![];
+        let opts = core::repository::clone::Options {
+            format: core::OutputFormat::Human,
+            bare: false,
+            handshake_info: true,
+            no_tags: false,
+            shallow: Shallow::NoChange,
+        };
+
+        let _ = prepare_and_run(
+            "clone",
+            trace,
+            auto_verbose,
+            progress,
+            progress_keep_open,
+            core::repository::clone::PROGRESS_RANGE,
+            move |progress, out, err| {
+                core::repository::clone(url.as_str(), Some(path), config, progress, out, err, opts)
+            },
+        );
 
         repo
     }
@@ -145,12 +158,13 @@ impl RepositoryFactory {
         url: Url,
         repo_name: String,
         branches: Vec<BranchName>,
-        //mpb: Arc<Mutex<MultiProgress>>,
-    ) -> Vec<PathBuf> {
+    ) -> DashMap<BranchName, BranchData> {
         let repo_name = repo_name.replace('-', "_");
 
-        branches
-            .par_iter()
+        let dash = DashMap::new();
+
+        let _ = branches
+            .into_iter()
             .map(|branch| {
                 let hash_suffix = Alphanumeric.sample_string(&mut rand::thread_rng(), 6);
                 let hashed_repo_name = format!("{}_{}", repo_name, hash_suffix);
@@ -159,62 +173,138 @@ impl RepositoryFactory {
                     "{}/{}/{}",
                     DEFAULT_PATH,
                     hashed_repo_name,
-                    branch.to_string(),
+                    branch.0.to_string()
                 );
 
+                let _ = fs::create_dir_all(path.clone());
                 let branch_clone_path = PathBuf::from_str(&path).unwrap();
+                let url = gix::url::parse(url.as_str().into()).unwrap();
 
-                //let pb_clone = ProgressBar::new(0);
-                //let pb_delta = ProgressBar::new(0);
+                // TODO: can be obtained from the main branch path copy
+                let prepare_clone =
+                    gix::prepare_clone_bare(url.clone(), &branch_clone_path.clone()).unwrap();
 
-                //let style_clone = ProgressStyle::with_template(
-                //    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-                //)
-                //.unwrap()
-                //.progress_chars("#>-");
+                let branch_copy = branch.clone();
+                let (prepare_checkout, _) = prepare_clone
+                    .configure_remote(move |mut r| {
+                        r.replace_refspecs(
+                            [BString::from(branch_copy.to_string())],
+                            gix::remote::Direction::Fetch,
+                        )
+                        .unwrap();
+
+                        Ok(r)
+                    })
+                    .fetch_then_checkout(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)
+                    .unwrap();
+
+                let repo = prepare_checkout.persist();
+
+                let binding = branch.to_string();
+                let binding = binding.split("/").collect::<Vec<&str>>();
+                let short_name = binding.get(1).unwrap();
+
+                //Self::fetch_repo(&repo, url, &short_name);
+                //let oid = Self::checkout_worktree(&repo, &short_name, &branch_clone_path).unwrap();
                 //
-                //let style_delta = ProgressStyle::with_template(
-                //    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-                //)
-                //.unwrap()
-                //.progress_chars("#>-");
-                //
-                //pb_clone.set_style(style_clone);
-                //pb_delta.set_style(style_delta);
-                let cb = create_multi_callback(
-                    repo_name.clone(),
-                    branch.to_string(),
-                    //pb_clone,
-                    //pb_delta,
-                ); //,mpb
+                //let local = repo
+                //    .references()
+                //    .unwrap()
+                //    .local_branches()
+                //    .unwrap()
+                //    .map(|a| a.unwrap().name().shorten().as_bstr().to_string())
+                //    .collect::<Vec<String>>();
 
-                let mut fo = FetchOptions::new();
-                fo.remote_callbacks(cb);
+                //local.get(0).unwrap().to_string();
+                //println!("Local repo : {:#?}", local);
+                //println!("Oid for {:#?} : {}", branch.to_string(), oid);
 
-                let repo = RepoBuilder::new()
-                    .bare(true)
-                    .fetch_options(fo)
-                    .branch(&branch.to_string())
-                    .clone(url.clone().as_str(), &branch_clone_path);
+                let bd = BranchData {
+                    branch_path: branch_clone_path,
+                    repo: repo.into_sync(),
+                };
 
-                match repo {
-                    Ok(_) => log::debug!(
-                        "[{:?}] Cloning branch : {:?} at {}",
-                        repo_name,
-                        branch,
-                        path
-                    ),
-                    Err(_) => {
-                        log::error!("Failed to clone {} with branch {:?}", repo_name, branch)
-                    }
-                }
-
-                branch_clone_path
+                dash.insert(BranchName(short_name.to_string()), bd);
             })
-            .collect::<Vec<PathBuf>>()
+            .collect::<()>();
+
+        dash
     }
 
-    pub fn create(mut self, mpb: Arc<Mutex<MultiProgress>>) -> Repository {
+    //async fn async_clone_branches(
+    //    url: Url,
+    //    repo_name: String,
+    //    branches: Vec<BranchName>,
+    //) -> DashMap<BranchName, BranchData> {
+    //    let repo_name = repo_name.replace('-', "_");
+    //
+    //    //let dash = Arc::new(DashMap::new());
+    //    let dash = DashMap::new();
+    //
+    //    branches
+    //        .iter()
+    //        .map(|branch| async {
+    //            //let branch = branch.clone();
+    //            //let repo_name = repo_name.clone();
+    //            //let url = url.clone();
+    //            //let dash_arc = dash.clone();
+    //
+    //            let hash_suffix = Alphanumeric.sample_string(&mut rand::thread_rng(), 6);
+    //            let hashed_repo_name = format!("{}_{}", repo_name, hash_suffix);
+    //
+    //            let path = format!(
+    //                "{}/{}/{}",
+    //                DEFAULT_PATH,
+    //                hashed_repo_name,
+    //                branch.0.to_string()
+    //            );
+    //
+    //            let _ = fs::create_dir_all(path.clone());
+    //            let branch_clone_path = PathBuf::from_str(&path).unwrap();
+    //            let url = gix::url::parse(url.as_str().into()).unwrap();
+    //
+    //            //tokio::spawn(async move {
+    //            // TODO: can be obtained from the main branch path copy
+    //            let prepare_clone =
+    //                gix::prepare_clone_bare(url.clone(), &branch_clone_path.clone()).unwrap();
+    //
+    //            let branch_copy = branch.clone();
+    //            let (repo, _) = prepare_clone
+    //                .configure_remote(move |mut r| {
+    //                    r.replace_refspecs(
+    //                        [BString::from(branch_copy.to_string())],
+    //                        gix::remote::Direction::Fetch,
+    //                    )
+    //                    .unwrap();
+    //
+    //                    Ok(r)
+    //                })
+    //                .fetch_only(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)
+    //                .await
+    //                .unwrap();
+    //
+    //            //let repo = prepare_checkout.persist();
+    //
+    //            let binding = branch.to_string();
+    //            let binding = binding.split("/").collect::<Vec<&str>>();
+    //            let short_name = binding.get(1).unwrap();
+    //
+    //            let bd = BranchData {
+    //                branch_path: branch_clone_path,
+    //                repo: Arc::new(Mutex::new(repo.into_sync())),
+    //            };
+    //
+    //            dash.insert(BranchName(short_name.to_string()), bd);
+    //            //})
+    //            //.await;
+    //        })
+    //        .collect::<Vec<_>>();
+    //
+    //    dash
+    //    //DashMap::new()
+    //}
+
+    pub fn create(self) -> Repository {
         let mut path_segments = self.url.path_segments().unwrap();
         let owner = path_segments.next().unwrap().to_string();
         let repo_name = path_segments.next().unwrap().to_string();
@@ -228,46 +318,37 @@ impl RepositoryFactory {
         ))
         .unwrap();
 
-        let mut clone_paths: Vec<PathBuf> = Vec::new();
-        let repo = Self::clone(
-            &self.url,
-            repo_name.clone(),
-            clone_location.as_path(),
-            //mpb,
-        )
-        .unwrap();
+        fs::create_dir_all(clone_location.clone()).expect("Can't create directory for repository");
 
-        let head = Self::get_head_branch(&repo);
-        if !head.is_empty() {
-            clone_paths.push(clone_location);
-        }
+        // Clone default branch (main or master)
+        let repo = Self::clone(self.url.clone(), clone_location.clone()).into_sync();
+        let default_local_branch = Self::get_default_local_branch(&repo);
+
+        let bd = BranchData {
+            branch_path: clone_location.clone(),
+            repo: repo.clone(),
+        };
+        let mut default_dash = DashMap::new();
+        default_dash.insert(BranchName(default_local_branch.clone()), bd);
 
         // Clone all branches
         if self.all_branches {
-            let mut branches = Self::fetch_branches(&repo, &head);
-            let paths = Self::clone_branches(
-                self.url.clone(),
-                repo_name.clone(),
-                branches.clone(),
-                //self.mpb,
-            );
+            let branches = Self::find_remote_branches(&repo, &default_local_branch);
 
-            branches.push(BranchName(head));
-            self.branches = branches.clone();
+            if branches.last().unwrap().to_string() != format!("origin/{}", default_local_branch) {
+                let all_branch_dash =
+                    Self::clone_branches(self.url.clone(), repo_name.clone(), branches.clone());
 
-            clone_paths.extend(paths);
-        }
-        // Clone only default branch
-        else {
-            self.branches = vec![BranchName(head)];
+                default_dash.extend(all_branch_dash);
+            }
         }
 
         Repository {
+            url: self.url.to_string(),
             name: repo_name,
             owner,
-            branches: self.branches.clone(),
-            clone_paths,
-            branch_data: HashMap::new(),
+            repo_per_branches: default_dash,
+            branch_data: DashMap::new(),
         }
     }
 }
@@ -275,19 +356,18 @@ impl RepositoryFactory {
 impl Repository {
     pub fn extract_log(mut self) -> Repository {
         self.branch_data = self
-            .branches
+            .repo_per_branches
             .clone()
             .into_iter()
-            .zip(self.clone_paths.clone())
             .map(|(br, pt)| {
                 let t1 = Instant::now();
 
-                let repo_data: Committers =
-                    Log::build(pt.clone(), self.name.clone(), br.to_string());
+                println!("handle {}", br.to_string());
+                let repo_data = Log::build(br.clone(), &pt.clone(), &self.url);
 
-                log::info!("Build log Time : {:?}", t1.elapsed());
+                println!("Build log Time : {:?}", t1.elapsed());
 
-                let remove_path = pt.parent().unwrap();
+                let remove_path = pt.branch_path.parent().unwrap();
                 let removal = remove_dir_all(remove_path);
                 match removal {
                     Ok(_) => log::debug!("Cleaning - Delete folder at {:?}", &remove_path),
@@ -296,7 +376,7 @@ impl Repository {
 
                 (br, repo_data)
             })
-            .collect::<HashMap<_, _>>();
+            .collect::<DashMap<_, _>>();
 
         self
     }
@@ -338,13 +418,12 @@ impl Committers {
         }
     }
 
-    pub fn update(&mut self, repo: &git2::Repository, commit_id: Oid) -> &Self {
-        log::debug!("Looking in commit {}", commit_id);
+    pub fn update(&mut self, commit: &Commit) -> &Self {
+        log::debug!("Looking in commit {}", commit.id);
 
-        let commit = repo.find_commit(commit_id).unwrap();
-        let commit_sigature = commit.author();
-        let author: AuthorName = AuthorName(commit_sigature.name().unwrap_or("").to_string());
-        let mail = commit_sigature.email().unwrap_or("").to_string();
+        let commit_sigature = commit.author().unwrap();
+        let author: AuthorName = AuthorName(commit_sigature.name.as_bstr().to_string());
+        let mail = commit_sigature.email.as_bstr().to_string();
 
         self.committers
             .entry(author)
@@ -355,15 +434,15 @@ impl Committers {
                     .entry(mail.clone())
                     .and_modify(|commit_ids| {
                         // Mail Key exist
-                        commit_ids.push(commit_id.to_string());
+                        commit_ids.push(commit.id.to_string());
                     })
                     .or_insert_with(||
                         // Mail Key do not exist
-                        vec![commit_id.to_string()]);
+                        vec![commit.id.to_string()]);
             })
             .or_insert_with(||
                 // Author Key do not exist
-                Committer::new(mail, commit_id.to_string()));
+                Committer::new(mail, commit.id.to_string()));
 
         // A little bit faster but not cleaner
         //let committer = Committer::new(mail.clone(), commit_id.to_string());
@@ -392,81 +471,3 @@ impl Committers {
         self
     }
 }
-
-fn create_multi_callback(
-    repo_name: String,
-    branch_name: String,
-    //pb_clone: ProgressBar,
-    //pb_delta: ProgressBar,
-) -> RemoteCallbacks<'static> {
-    let mut cb = RemoteCallbacks::new();
-
-    let mut is_clone_finished = false;
-    let mut is_delta_finished = false;
-    let mut delta_length_is_set = false;
-
-    cb.transfer_progress(move |stats| {
-        if stats.received_objects() == 0 {
-            //pb_clone.set_message(format!("[{}][{}]", repo_name, branch_name));
-            //pb_clone.set_length(stats.total_objects().try_into().unwrap());
-        }
-
-        if stats.indexed_deltas() > 0 && !delta_length_is_set {
-            //pb_delta.set_message(format!("[{}][{}]", repo_name, branch_name));
-            //pb_delta.set_length(stats.total_deltas().try_into().unwrap());
-            delta_length_is_set = true;
-        }
-
-        if (stats.received_objects() <= stats.total_objects()) && !is_clone_finished {
-            //pb_clone.set_position(stats.received_objects().try_into().unwrap());
-            //pb_clone.tick();
-            if stats.received_objects() == stats.total_objects() {
-                //pb_clone.finish_with_message(format!(
-                //    "[{} ✅][{} ✅]",
-                //    repo_name.clone(),
-                //    branch_name.clone()
-                //));
-                //pb_clone.finish_and_clear();
-                is_clone_finished = true;
-            }
-        }
-
-        if (stats.indexed_deltas() <= stats.total_deltas())
-            && stats.total_deltas() > 0
-            && is_clone_finished
-            && !is_delta_finished
-        {
-            //pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
-
-            if stats.indexed_deltas() == stats.total_deltas() {
-                //pb_delta.finish_with_message(format!(
-                //    "[{} ✅][{} ✅]",
-                //    repo_name.clone(),
-                //    branch_name.clone()
-                //));
-                is_delta_finished = true;
-            }
-        }
-
-        true
-    });
-
-    cb
-}
-
-//fn print(state: &mut State, pb_clone: &mut ProgressBar, pb_delta: &mut ProgressBar) {
-//    let stats = state.progress.as_ref().unwrap();
-//    let network_pct = (100 * stats.received_objects()) / stats.total_objects();
-//    let index_pct = (100 * stats.indexed_objects()) / stats.total_objects();
-//    let kbytes = stats.received_bytes() / 1024;
-//
-//    if stats.indexed_deltas() < stats.total_deltas() {
-//        pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
-//        //io::stdout().flush().unwrap();
-//    }
-//
-//    if stats.received_objects() < stats.total_objects() {
-//        pb_clone.set_position(stats.received_objects().try_into().unwrap());
-//        //io::stdout().flush().unwrap();
-//    }
-//}

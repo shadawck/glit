@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ahash::RandomState;
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -76,7 +78,12 @@ impl OrgFactory {
 #[async_trait]
 impl Factory for OrgFactory {
     async fn _repositories_count(client: &Client, url: Url) -> usize {
-        let resp = client.get(url).send().await.unwrap();
+        let resp = client
+            .get(url)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .unwrap();
         let text = resp.text().await.unwrap();
 
         let parser = Html::parse_document(&text);
