@@ -31,7 +31,7 @@ impl Exporter<Repository> {
             let json_value = serde_json::to_string_pretty(&data.branch_data).unwrap();
             fs::write(path.as_path(), json_value).unwrap();
 
-            println!("File -> {}", path.to_str().unwrap().yellow());
+            println!("\nResult written in {}", path.to_str().unwrap().yellow());
         }
     }
 }
@@ -50,7 +50,7 @@ impl Exporter<User> {
             let json_value = serde_json::to_string_pretty(data).unwrap();
             fs::write(path.as_path(), json_value).unwrap();
 
-            println!("File -> {}", path.to_str().unwrap().yellow());
+            println!("\nResult written in {}", path.to_str().unwrap().yellow());
         }
     }
 }
@@ -69,7 +69,7 @@ impl Exporter<Org> {
             let json_value = serde_json::to_string_pretty(data).unwrap();
             fs::write(path.as_path(), json_value).unwrap();
 
-            println!("File -> {}", path.to_str().unwrap().yellow());
+            println!("\nResult written in {}", path.to_str().unwrap().yellow());
         }
     }
 }

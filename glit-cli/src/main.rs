@@ -15,7 +15,7 @@ use colored::Colorize;
 use exporter::Exporter;
 use glit_core::{
     org::{Org, OrgFactory},
-    repo::RepositoryFactory,
+    repo::{Repository, RepositoryFactory},
     user::{User, UserFactory},
     Logger,
 };
@@ -28,6 +28,8 @@ use repository_command_handler::RepoCommandHandler;
 use reqwest::ClientBuilder;
 
 use user_command_handler::UserCommandHandler;
+
+use crate::printer::Printer;
 
 #[tokio::main]
 async fn main() {
@@ -145,8 +147,8 @@ async fn main() {
             let repository = RepositoryFactory::with_config(repository_config).create(mpb);
             let repo_extraction = repository.extract_log();
 
-            //let printer = Printer::<Repository>::new(global_config.clone());
-            //printer.print_repo(&repo_extraction);
+            let printer = Printer::<Repository>::new(global_config.clone());
+            printer.print_repo(&repo_extraction);
 
             let exporter = Exporter::new(global_config);
             exporter.export_repo(&repo_extraction);
@@ -162,8 +164,8 @@ async fn main() {
 
             let user_with_log = Logger::log_for(user, &client).await;
 
-            //let printer = Printer::new(global_config.clone());
-            //printer.print_user(&user_with_log);
+            let printer = Printer::new(global_config.clone());
+            printer.print_user(&user_with_log);
 
             let exporter = Exporter::new(global_config.clone());
             exporter.export_user(&user_with_log);
@@ -180,8 +182,8 @@ async fn main() {
 
             let org_with_log = Logger::log_for(org, &client).await;
 
-            //let printer = Printer::new(global_config.clone());
-            //printer.print_org(&org_with_log);
+            let printer = Printer::new(global_config.clone());
+            printer.print_org(&org_with_log);
 
             let exporter = Exporter::new(global_config.clone());
             exporter.export_org(&org_with_log);

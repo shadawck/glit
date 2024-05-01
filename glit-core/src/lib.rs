@@ -151,12 +151,12 @@ pub trait ExtractLog {
                         let repo_name_key = RepoName(repo.name.clone());
                         dash.insert(repo_name_key, data);
                         atomic_count.fetch_add(1, Ordering::Relaxed);
-                        println!(
-                            "Repository {} handled : {}/{}",
-                            repo.name,
-                            atomic_count.load(Ordering::Relaxed),
-                            repo_count
-                        );
+                        //println!(
+                        //    "Repository {} handled : {}/{}",
+                        //    repo.name,
+                        //    atomic_count.load(Ordering::Relaxed),
+                        //    repo_count
+                        //);
                     })
                 }
                 dash

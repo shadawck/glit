@@ -533,12 +533,12 @@ dependencies = [
 
 [[package]]
 name = "glit-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "colored",
  "env_logger",
- "glit-core 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "glit-core",
  "indicatif",
  "log",
  "reqwest",
@@ -548,30 +548,7 @@ dependencies = [
 
 [[package]]
 name = "glit-core"
-version = "0.2.0"
-dependencies = [
- "ahash",
- "async-trait",
- "crossbeam-channel",
- "dashmap",
- "futures-util",
- "git2",
- "indicatif",
- "log",
- "rand",
- "rayon",
- "reqwest",
- "scraper",
- "serde",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "glit-core"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f004ac53258320d8c03a1a60cea45d98d89750b074cb51f77ee298286524b79"
+version = "0.3.0"
 dependencies = [
  "ahash",
  "async-trait",

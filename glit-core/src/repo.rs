@@ -102,26 +102,26 @@ impl RepositoryFactory {
         path: &Path,
         //mpb: Arc<Mutex<MultiProgress>>,
     ) -> Result<git2::Repository, git2::Error> {
-        //let pb_clone = ProgressBar::new(0);
-        //let pb_delta = ProgressBar::new(0);
+        let pb_clone = ProgressBar::new(0);
+        let pb_delta = ProgressBar::new(0);
 
         //mpb.lock().unwrap().add(pb_clone.clone());
 
-        //let style_clone = ProgressStyle::with_template(
-        //    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-        //)
-        //.unwrap()
-        //.progress_chars("#>-");
-        //
-        //let style_delta = ProgressStyle::with_template(
-        //    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-        //)
-        //.unwrap()
-        //.progress_chars("#>-");
-        //
-        //pb_clone.set_style(style_clone);
-        //pb_delta.set_style(style_delta);
-        let cb = create_multi_callback(repo_name, "default".to_string()); //  pb_clone, pb_delta , mpb
+        let style_clone = ProgressStyle::with_template(
+            "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+        )
+        .unwrap()
+        .progress_chars("#>-");
+        
+        let style_delta = ProgressStyle::with_template(
+            "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+        )
+        .unwrap()
+        .progress_chars("#>-");
+        
+        pb_clone.set_style(style_clone);
+        pb_delta.set_style(style_delta);
+        let cb = create_multi_callback(repo_name, "default".to_string(), pb_clone, pb_delta ); //  , mpb
 
         let mut fo = FetchOptions::new();
         fo.remote_callbacks(cb);
@@ -164,28 +164,28 @@ impl RepositoryFactory {
 
                 let branch_clone_path = PathBuf::from_str(&path).unwrap();
 
-                //let pb_clone = ProgressBar::new(0);
-                //let pb_delta = ProgressBar::new(0);
+                let pb_clone = ProgressBar::new(0);
+                let pb_delta = ProgressBar::new(0);
 
-                //let style_clone = ProgressStyle::with_template(
-                //    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-                //)
-                //.unwrap()
-                //.progress_chars("#>-");
-                //
-                //let style_delta = ProgressStyle::with_template(
-                //    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
-                //)
-                //.unwrap()
-                //.progress_chars("#>-");
-                //
-                //pb_clone.set_style(style_clone);
-                //pb_delta.set_style(style_delta);
+                let style_clone = ProgressStyle::with_template(
+                    "🚧 CLONING    {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+                )
+                .unwrap()
+                .progress_chars("#>-");
+                
+                let style_delta = ProgressStyle::with_template(
+                    "🚀 RESOLVING  {msg}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ",
+                )
+                .unwrap()
+                .progress_chars("#>-");
+                
+                pb_clone.set_style(style_clone);
+                pb_delta.set_style(style_delta);
                 let cb = create_multi_callback(
                     repo_name.clone(),
                     branch.to_string(),
-                    //pb_clone,
-                    //pb_delta,
+                    pb_clone,
+                    pb_delta,
                 ); //,mpb
 
                 let mut fo = FetchOptions::new();
@@ -396,8 +396,8 @@ impl Committers {
 fn create_multi_callback(
     repo_name: String,
     branch_name: String,
-    //pb_clone: ProgressBar,
-    //pb_delta: ProgressBar,
+    pb_clone: ProgressBar,
+    pb_delta: ProgressBar,
 ) -> RemoteCallbacks<'static> {
     let mut cb = RemoteCallbacks::new();
 
@@ -407,26 +407,26 @@ fn create_multi_callback(
 
     cb.transfer_progress(move |stats| {
         if stats.received_objects() == 0 {
-            //pb_clone.set_message(format!("[{}][{}]", repo_name, branch_name));
-            //pb_clone.set_length(stats.total_objects().try_into().unwrap());
+            pb_clone.set_message(format!("[{}][{}]", repo_name, branch_name));
+            pb_clone.set_length(stats.total_objects().try_into().unwrap());
         }
 
         if stats.indexed_deltas() > 0 && !delta_length_is_set {
-            //pb_delta.set_message(format!("[{}][{}]", repo_name, branch_name));
-            //pb_delta.set_length(stats.total_deltas().try_into().unwrap());
+            pb_delta.set_message(format!("[{}][{}]", repo_name, branch_name));
+            pb_delta.set_length(stats.total_deltas().try_into().unwrap());
             delta_length_is_set = true;
         }
 
         if (stats.received_objects() <= stats.total_objects()) && !is_clone_finished {
-            //pb_clone.set_position(stats.received_objects().try_into().unwrap());
-            //pb_clone.tick();
+            pb_clone.set_position(stats.received_objects().try_into().unwrap());
+            pb_clone.tick();
             if stats.received_objects() == stats.total_objects() {
-                //pb_clone.finish_with_message(format!(
-                //    "[{} ✅][{} ✅]",
-                //    repo_name.clone(),
-                //    branch_name.clone()
-                //));
-                //pb_clone.finish_and_clear();
+                pb_clone.finish_with_message(format!(
+                    "[{} ✅][{} ✅]",
+                    repo_name.clone(),
+                    branch_name.clone()
+                ));
+                pb_clone.finish_and_clear();
                 is_clone_finished = true;
             }
         }
@@ -436,14 +436,14 @@ fn create_multi_callback(
             && is_clone_finished
             && !is_delta_finished
         {
-            //pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
+            pb_delta.set_position(stats.indexed_deltas().try_into().unwrap());
 
             if stats.indexed_deltas() == stats.total_deltas() {
-                //pb_delta.finish_with_message(format!(
-                //    "[{} ✅][{} ✅]",
-                //    repo_name.clone(),
-                //    branch_name.clone()
-                //));
+                pb_delta.finish_with_message(format!(
+                    "[{} ✅][{} ✅]",
+                    repo_name.clone(),
+                    branch_name.clone()
+                ));
                 is_delta_finished = true;
             }
         }
