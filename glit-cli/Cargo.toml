@@ -22,8 +22,8 @@ reqwest = { version = "0.11.18", default-features = false, features = [
 ] }
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 
-#glit-core = "0.2.0"
-glit-core = { path = '../glit-core' }
+glit-core = "0.3.0"
+#glit-core = { path = '../glit-core' }
 
 clap = { version = "4.3", features = ["cargo"] }
 colored = "2.0.4"
